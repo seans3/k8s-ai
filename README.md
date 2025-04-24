@@ -55,6 +55,17 @@ Please see the [Prerequisites Guide](./prerequisites.md) for detailed instructio
         ```bash
         kubectl logs -f -l app=gemma-server # Adjust label selector
         ```
+    * The logs will look something like
+	    ```bash
+		INFO:     Automatically detected platform cuda.
+...
+INFO      [launcher.py:34] Route: /v1/chat/completions, Methods: POST
+...
+INFO:     Started server process [13]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+Default STARTUP TCP probe succeeded after 1 attempt for container "vllm--google--gemma-3-4b-it-1" on port 8080.
+        ```
 
 ## III. Serve the Model (Expose and Interact)
 
