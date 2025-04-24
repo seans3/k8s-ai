@@ -93,7 +93,7 @@ Please see the [Prerequisites Guide](./prerequisites.md) for detailed instructio
         curl -X POST http://localhost:8080/v1/chat/completions \
         -H "Content-Type: application/json" \
         -d '{
-            "model": "'"$MODEL_ID"'",
+            "model": "google/gemma-3-1b-it",
             "messages": [{"role": "user", "content": "Explain Quantum Computing in simple terms."}]
         }'
         ```

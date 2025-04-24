@@ -31,7 +31,7 @@
         export REGION="us-central1" # Region is set to us-central1
         export CLUSTER_NAME="your-gke-cluster-name" # Choose a name for your cluster
         export HF_TOKEN="your-hugging-face-token" # Your actual Hugging Face token
-        export MODEL_ID="google/gemma-2b-it" # Example model, change as per your needs
+        export MODEL_ID="google/gemma-1b-it" # 1 billion parameter (smallest) model
         ```
         Ensure you replace placeholder values like `your-project-id` with your actual information.
 		
