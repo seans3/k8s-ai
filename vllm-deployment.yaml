@@ -53,5 +53,6 @@ spec:
         emptyDir:
             medium: Memory
       nodeSelector:
+        # Nvidia L4 GPU
         cloud.google.com/gke-accelerator: nvidia-l4
         cloud.google.com/gke-gpu-driver-version: latest

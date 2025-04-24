@@ -1,4 +1,4 @@
-# Summary: Creating a vLLM Inference Server on GKE Autopilot (using Hugging Face model repo)
+# Summary: AI Inference (GKE/GPU/vLLM/gemma)
 
 Before you begin, ensure you have completed all necessary setup steps.
 Please see the [Prerequisites Guide](./prerequisites.md) for detailed instructions.
@@ -33,7 +33,7 @@ Please see the [Prerequisites Guide](./prerequisites.md) for detailed instructio
     * **Key configurations in this file include:**
         * `spec.replicas`: Number of vLLM instances.
         * `spec.template.spec.containers`:
-            * `image`: The vLLM Docker image (e.g., `vllm/vllm-openai:latest` or a specific version).
+            * `image`: The vLLM Docker image (eg. pytorch-vllm-serve)
             * `env`: Environment variables, including `HF_TOKEN` (mounted from the secret).
             * `args`: Command-line arguments for the vLLM server, such as `--model`, model name, `--port 8000`, and potentially `--tensor-parallel-size`.
             * `resources.limits`: **Crucially, specify the GPU resources required (e.g., `nvidia.com/gpu: "1"`)**. This tells Autopilot to provision a node with the requested GPU type for this pod. You might also need to add a `nodeSelector` for the specific GPU type if not using default Autopilot GPU classes (e.g., `cloud.google.com/gke-accelerator: nvidia-l4`).
@@ -64,7 +64,7 @@ Please see the [Prerequisites Guide](./prerequisites.md) for detailed instructio
         INFO:     Started server process [13]
         INFO:     Waiting for application startup.
         INFO:     Application startup complete.
-        Default STARTUP TCP probe succeeded after 1 attempt for container "vllm--google--gemma-3-4b-it-1" on port 8080.
+        Default STARTUP TCP probe succeeded after 1 attempt for container "vllm--google--gemma-3-1b-it-1" on port 8000.
         ```
 
 ## III. Serve the Model (Expose and Interact)
@@ -75,7 +75,7 @@ Please see the [Prerequisites Guide](./prerequisites.md) for detailed instructio
     * **Key configurations in this file include:**
         * `type: ClusterIP`: This makes the service reachable only from within the GKE cluster. For local testing/development, you will typically use `kubectl port-forward`.
         * `spec.selector`: Must match the labels of your vLLM deployment's pods.
-        * `spec.ports`: Define the port the service listens on (e.g., `port: 80`) and the `targetPort` (the container port of vLLM, usually 8000, or its named port).
+        * `spec.ports`: Define the port the service listens on (e.g., `port: 8000`) and the `targetPort` (the container port of vLLM, usually 8000, or its named port).
 2.  **Apply the Service Manifest:**
     ```bash
     kubectl apply -f vllm-service.yaml
@@ -83,10 +83,10 @@ Please see the [Prerequisites Guide](./prerequisites.md) for detailed instructio
 3.  **Accessing the Service (via Port Forwarding for Local Testing):**
     * Since `ClusterIP` services are not directly accessible externally, use `kubectl port-forward` to forward traffic from your local machine to the service within the cluster.
         ```bash
-        # Forward a local port (e.g., 8080) to the service port (e.g., 80)
-        kubectl port-forward service/vllm-gemma-service 8080:80 # Adjust service name, local port, and service port as needed
+        # Forward a local port (e.g., 8080) to the service port (e.g., 8000)
+        kubectl port-forward service/vllm-gemma-service 8080:8000 # Adjust service name, local port, and service port as needed
         ```
-        Now, requests to `localhost:8080` on your machine will be forwarded to port `80` on the `vllm-gemma-service` inside GKE.
+        Now, requests to `localhost:8080` on your machine will be forwarded to port `8000` on the `vllm-gemma-service` inside GKE.
 4.  **Interact with the Model:**
     * **Using `curl` (via port-forward):** Send HTTP POST requests to `localhost` on the port you forwarded.
         ```bash
