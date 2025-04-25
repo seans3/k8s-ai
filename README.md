@@ -5,7 +5,7 @@
 [VLLM-GPU](./vllm-gpu/README.md)
 
 - Cluster: GKE
-- Accelerator: GPU
+- Accelerator: GPU (Nvidia L4)
 - AI Inference Server: [vLLM](https://docs.vllm.ai/en/latest/)
 - Model: Gemma 3 (1 Billion Parameters)
   - File: gemma-3-1b-it
