@@ -4,6 +4,20 @@
 
 [VLLM-GPU](./vllm-gpu/README.md)
 
+- Cluster: GKE
+- Accelerator: GPU
+- AI Inference Server: [vLLM](https://docs.vllm.ai/en/latest/)
+- Model: Gemma 3 (1 Billion Parameters)
+  - File: gemma-3-1b-it
+  - Model Repo: [Hugging Face](https://huggingface.co/google/gemma-3-1b-it)
+
 ## Jetstream/TPU/Gemma 3 7B/Kaggle
 
 [Jetstream-TPU](./jetstream-tpu/README.md)
+
+- Cluster: GKE
+- Accelerator: [TPU](https://cloud.google.com/kubernetes-engine/docs/concepts/tpus#availability)
+- AI Inference Server: [Jetstream](https://github.com/AI-Hypercomputer/JetStream)
+- Model: Gemma 3 (7 Billion Parameters)
+  - File: gemma-3-7b-it
+  - Model Repo: [Kaggle](https://www.kaggle.com/models/google/gemma)
