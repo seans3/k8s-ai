@@ -88,7 +88,7 @@ gcloud container clusters create ${CLUSTER_NAME} \
 Setup Kubectl to target the cluster
 
 ```bash
-gcloud container clusters get-credentials kro --region $REGION --project $PROJECT_ID
+gcloud container clusters get-credentials ${CLUSTER_NAME} --project ${PROJECT_ID}
 ```
 
 ### Setup KCC 
