@@ -1,0 +1,87 @@
+apiVersion: kro.run/v1alpha1
+kind: ResourceGraphDefinition
+metadata:
+  name: gemmaonnvidial4.kro.run
+spec:
+  schema:
+    apiVersion: v1alpha1
+    kind: GemmaOnNvidiaL4Server
+    spec:
+      replicas: integer | default=1
+      hfsecret: string | default=hf-token
+    #status:
+    #  service: ${service.status.service}
+  resources:
+  - id: deployment
+    template:
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: ${schema.metadata.name}
+        namespace: ${schema.metadata.namespace}
+      spec:
+        replicas: ${schema.spec.replicas}
+        selector:
+          matchLabels:
+            app: ${schema.metadata.name}
+        template:
+          metadata:
+            labels:
+              app: ${schema.metadata.name}
+              # 1 billion parameter model (smallest)
+              ai.gke.io/model: gemma-3-1b-it
+              ai.gke.io/inference-server: vllm
+              examples.ai.gke.io/source: user-guide
+          spec:
+            containers:
+            - name: inference-server
+              image: us-docker.pkg.dev/vertex-ai/vertex-vision-model-garden-dockers/pytorch-vllm-serve:20250312_0916_RC01
+              resources:
+                requests:
+                  cpu: "2"
+                  memory: "10Gi"
+                  ephemeral-storage: "10Gi"
+                  nvidia.com/gpu: "1"
+                limits:
+                  cpu: "2"
+                  memory: "10Gi"
+                  ephemeral-storage: "10Gi"
+                  nvidia.com/gpu: "1"
+              command: ["python3", "-m", "vllm.entrypoints.openai.api_server"]
+              args:
+              - --model=google/gemma-3-1b-it
+              - --tensor-parallel-size=1
+              - --host=0.0.0.0
+              - --port=8081
+              env:
+              - name: HUGGING_FACE_HUB_TOKEN
+                valueFrom:
+                  secretKeyRef:
+                    name: ${schema.spec.hfsecret}
+                    key: hf_api_token
+              volumeMounts:
+              - mountPath: /dev/shm
+                name: dshm
+            volumes:
+            - name: dshm
+              emptyDir:
+                  medium: Memory
+            nodeSelector:
+              cloud.google.com/gke-accelerator: nvidia-l4
+              cloud.google.com/gke-gpu-driver-version: latest
+  - id: service
+    template:
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: ${schema.metadata.name}
+        namespace: ${schema.metadata.namespace}
+      spec:
+        selector:
+          app: ${schema.metadata.name}
+        type: ClusterIP
+        ports:
+          - protocol: TCP
+            port: 8081
+            targetPort: 8081
+      
