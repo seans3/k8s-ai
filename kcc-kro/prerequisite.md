@@ -26,8 +26,10 @@ Steps to setup a new GCP project:
 export USERNAME=${USER?}
 export PROJECT_ID=k8sai-${USERNAME?} 
 export REGION=us-central1 # << CHANGE region here 
-# Please set the appropriate folder, billing
-export GCP_FOLDER=0000000000
+# Please set the appropriate folder or ORG billing
+export GCP_FOLDER=0000000000 # one of folder or org is needed
+export GCP_ORG=someorg       # one of folder or org is needed
+# Please set the appropriate billing
 export GCP_BILLING=000000-000000-000000
 export ADMINUSER=someone@company.com
 
@@ -36,8 +38,11 @@ gcloud config configurations create k8sai
 gcloud config configurations activate k8sai
 gcloud config set account ${ADMINUSER?}
 
-# Create the project
+# Either Create the project using Org
+gcloud projects create ${PROJECT_ID?} --organization=${GCP_ORG?}
+# OR Create the project using Folder
 gcloud projects create ${PROJECT_ID?} --folder=${GCP_FOLDER?}
+
 gcloud auth application-default set-quota-project ${PROJECT_ID?}
 
 # attach billing (THIS IS IMPORTANT)
@@ -100,6 +105,8 @@ kubectl apply -f operator-system/autopilot-configconnector-operator.yaml
 kubectl wait -n configconnector-operator-system --for=condition=Ready pod --all
 ```
 
+### Give KCC permissions to manage GCP project
+
 Create SA and bind with KCC KSA
 
 ```bash
@@ -141,21 +148,51 @@ spec:
   stateIntoSpec: Absent
 EOF
 ```
+### Setup Team namespace
 
 Create a namespace for KCC resources
 ```bash
+export NAMESPACE=config-connector # or team-a
 # from here: https://cloud.google.com/config-connector/docs/how-to/install-manually#specify
-kubectl create namespace config-connector
-kubectl annotate namespace config-connector cnrm.cloud.google.com/project-id=${PROJECT_ID?}
+kubectl create namespace ${NAMESPACE}
+
+# associate the gcp project with this namespace
+kubectl annotate namespace ${NAMESPACE} cnrm.cloud.google.com/project-id=${PROJECT_ID?}
 ```
 
 Verify KCC Installation
 ```bash
-# wait for pods to be created
+# wait for namespace reconcilers to be created
 kubectl get pods -n cnrm-system
 
-# wait for pods to be ready 
+# wait for namespace reconcilers to be ready 
 kubectl wait -n cnrm-system --for=condition=Ready pod --all
+```
+
+### Create KCC Project object
+
+This would be a useful reference object for other KCC objects in the namespace
+
+```bash
+export GCP_PROJECT_PARENT_TYPE=`gcloud projects  describe ${PROJECT_ID} --format json | jq -r ".parent.type"`
+export GCP_PROJECT_PARENT_ID=`gcloud projects  describe ${PROJECT_ID} --format json | jq -r ".parent.id"`
+
+parentRefKey=$(if [[ "$GCP_PROJECT_PARENT_TYPE" == "organization" ]]; then echo "organizationRef"; else echo "folderRef"; fi)
+
+kubectl apply -f - <<EOF
+apiVersion: resourcemanager.cnrm.cloud.google.com/v1beta1
+kind: Project
+metadata:
+  annotations:
+    cnrm.cloud.google.com/auto-create-network: "false"
+  name: acquire-namespace-project
+  namespace: ${NAMESPACE}
+spec:
+  name: ""
+  resourceID: ${PROJECT_ID}
+  ${parentRefKey}:
+    external: "${GCP_PROJECT_PARENT_ID}"
+EOF
 ```
 
 ### Install KRO
@@ -178,7 +215,9 @@ helm -n kro list
 
 kubectl wait -n kro --for=condition=Ready pod --all
 ```
-## 5. Hugging Face accesss
+## 5. Model Registry access
+
+### Hugging Face accesss
 
 Hugging Face is similar to docker for AI Models.
 
@@ -192,9 +231,29 @@ Hugging Face is similar to docker for AI Models.
 Store your Hugging Face token as a Kubernetes secret. This allows pods in your GKE cluster to securely authenticate with Hugging Face to download model files.
 
 ```bash
-export HF_TOKEN="your-hugging-face-token" # Your actual Hugging Face token
+export HF_TOKEN="your-hugging-face-token" # Your HF token
 kubectl create secret generic hf-secret \
+   --namespace=${NAMESPACE} \
    --from-literal=hf_token=$HF_TOKEN
+```
+
+### Kaggle API access
+* **Kaggle Account:** You need a Kaggle account.
+* **Accept Gemma License:** You must accept the Gemma model license terms and usage policy on Kaggle for the specific model version you intend to use.
+* **Kaggle API Credentials:**
+  * You will need your Kaggle username and a Kaggle API key.
+  * To get these, download your `kaggle.json` API token from your Kaggle account page (typically `https://www.kaggle.com/YOUR_USERNAME/account`, navigate to the "API" section, and click "Create New Token").
+  * The downloaded `kaggle.json` file contains your username and key. You will use these individual values for Kubernetes secret literals.
+
+### Create Kubernetes Secret for Kaggle
+
+```bash
+export KAGGLE_USERNAME=`jq  -r .username kaggle.json` #username from kaggle.json
+export KAGGLE_KEY=`jq  -r .key kaggle.json` #key from kaggle.json
+kubectl create secret generic kaggle-secret \
+   --namespace=${NAMESPACE} \
+   --from-literal=username=$KAGGLE_USERNAME \
+   --from-literal=key=$KAGGLE_KEY
 ```
 
 ## 6. Install the KRO RGDs
@@ -204,6 +263,9 @@ kubectl create secret generic hf-secret \
 # Install gemma RGD
 kubectl apply  -f rgd/gemma-on-nvidial4-server.yaml
 kubectl get  -f rgd/gemma-on-nvidial4-server.yaml # check is STATE is ACTIVE
+
+kubectl apply  -f rgd/gemma-on-tpu-server.yaml
+kubectl get  -f rgd/gemma-on-tpu-server.yaml # check is STATE is ACTIVE
 ```
 
 
