@@ -10,7 +10,7 @@ spec:
       replicas: integer | default=1
       hfsecret: string | default=hf-token
     #status:
-    #  service: ${service.status.service}
+    #  ip: ${service.spec.clusterIP}
   resources:
   - id: deployment
     template:
