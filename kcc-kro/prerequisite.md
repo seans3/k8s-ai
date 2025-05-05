@@ -232,9 +232,9 @@ Store your Hugging Face token as a Kubernetes secret. This allows pods in your G
 
 ```bash
 export HF_TOKEN="your-hugging-face-token" # Your HF token
-kubectl create secret generic hf-secret \
+kubectl create secret generic hf-token \
    --namespace=${NAMESPACE} \
-   --from-literal=hf_token=$HF_TOKEN
+   --from-literal=hf_api_token=$HF_TOKEN
 ```
 
 ### Kaggle API access
