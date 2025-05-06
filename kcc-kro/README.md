@@ -1,4 +1,4 @@
-# AI Inference on GKE
+# AI Inference on GKE using KCC and KRO
 
 Please follow the [pre requisites](prerequisite.md) to setup the inference cluster
 
