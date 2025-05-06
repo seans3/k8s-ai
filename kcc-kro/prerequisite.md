@@ -250,7 +250,7 @@ kubectl create secret generic hf-token \
 ```bash
 export KAGGLE_USERNAME=`jq  -r .username kaggle.json` #username from kaggle.json
 export KAGGLE_KEY=`jq  -r .key kaggle.json` #key from kaggle.json
-kubectl create secret generic kaggle-secret \
+kubectl create secret generic kaggle-token \
    --namespace=${NAMESPACE} \
    --from-literal=username=$KAGGLE_USERNAME \
    --from-literal=key=$KAGGLE_KEY

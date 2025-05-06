@@ -8,7 +8,7 @@ spec:
     kind: GemmaOnTPUServer
     spec:
       replicas: integer | default=1
-      kaggleSecret: string | default=kaggle-credentials
+      kaggleSecret: string | default=kaggle-token
       project: string # TODO KRO/BUG: support for external ref
     #status:
     #  service: ${service.status.service}
