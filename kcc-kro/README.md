@@ -28,7 +28,7 @@ apiVersion: kro.run/v1alpha1
 kind: GemmaOnTPUServer
 metadata:
   name: gemma-tpu
-  namespace: config-connector
+  namespace: ${NAMESPACE}
 spec:
   project: ${PROJECT_ID}
 EOF
