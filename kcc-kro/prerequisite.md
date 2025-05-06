@@ -278,10 +278,10 @@ If you are operating in a dev environment and want to clean it up, follow these 
 # in *nix shell USER should be set. if not set USERNAME explicitly
 export USERNAME=${USER?}
 export PROJECT_ID=compositions-${USERNAME?}
-export REGION=us-west2
+export REGION=${REGION}
 export CONFIG_CONTROLLER_NAME=compositions
 
-# Delete the GCP project if you created one for trying out KRO
+# DANGEROUS: Delete the GCP project if you created one for trying out KRO
 gcloud projects delete ${PROJECT_ID?}
 # Delete gcloud configuration
 gcloud config configurations activate <anything other than 'compositions'>
