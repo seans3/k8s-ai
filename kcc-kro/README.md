@@ -12,7 +12,7 @@ apiVersion: kro.run/v1alpha1
 kind: GemmaOnNvidiaL4Server
 metadata:
   name: gemma-l4
-  namespace: config-connector
+  namespace: ${NAMESPACE}
 spec:               ## TODO KRO/BUG: Requires .spec.replicas even if all spec fields are optional
   replicas: 1
 EOF
