@@ -248,12 +248,9 @@ kubectl create secret generic hf-token \
 ### Create Kubernetes Secret for Kaggle
 
 ```bash
-export KAGGLE_USERNAME=`jq  -r .username kaggle.json` #username from kaggle.json
-export KAGGLE_KEY=`jq  -r .key kaggle.json` #key from kaggle.json
 kubectl create secret generic kaggle-token \
    --namespace=${NAMESPACE} \
-   --from-literal=username=$KAGGLE_USERNAME \
-   --from-literal=key=$KAGGLE_KEY
+   --from-file=kaggle.json
 ```
 
 ## 6. Install the KRO RGDs
