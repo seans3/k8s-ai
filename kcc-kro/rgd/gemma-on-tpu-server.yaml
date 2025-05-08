@@ -90,6 +90,7 @@ spec:
         name: gemma7b-${schema.spec.project}
       spec:
         storageClass: STANDARD
+        force_destroy: true
   # TODO Create GSA , KSA and bindings
   - id: downloadCheckpoint
     readyWhen:
