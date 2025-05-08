@@ -88,9 +88,10 @@ spec:
         #name: gemma7b-${schema.metadata.uid} # TODO KRO/BUG: kro 0.3 would have it
         #name: gemma7b-${schema.metadata.resourceVersion} # TODO KRO/BUG: resourceVersion keeps changing for Instance resulting in different bucket names resulting in several buckets being created in a loop
         name: gemma7b-${schema.spec.project}
+        annotations:
+          cnrm.cloud.google.com/force-destroy: "true"
       spec:
         storageClass: STANDARD
-        force_destroy: true
   # TODO Create GSA , KSA and bindings
   - id: downloadCheckpoint
     readyWhen:
