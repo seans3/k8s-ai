@@ -93,6 +93,7 @@ spec:
   # TODO Create GSA , KSA and bindings
   - id: downloadCheckpoint
     readyWhen:
+      # - ${downloadCheckpoint.status.conditions[0].status == "True"}
       - ${downloadCheckpoint.status.completionTime != null}
     template:
       apiVersion: batch/v1
@@ -117,9 +118,9 @@ spec:
                 readOnly: true
               resources:
                 requests:
-                  google.com/tpu: 8
+                  google.com/tpu: "8"
                 limits:
-                  google.com/tpu: 8
+                  google.com/tpu: "8"
             nodeSelector:
               cloud.google.com/gke-tpu-topology: 2x4
               cloud.google.com/gke-tpu-accelerator: tpu-v5-lite-podslice
@@ -134,6 +135,7 @@ spec:
       kind: Deployment
       metadata:
         name: ${schema.metadata.name}
+        namespace: ${schema.metadata.namespace}
       spec:
         replicas: 1
         selector:
@@ -181,6 +183,7 @@ spec:
       kind: Service
       metadata:
         name: ${schema.metadata.name}
+        namespace: ${schema.metadata.namespace}
       spec:
         selector:
           app: ${schema.metadata.name}
