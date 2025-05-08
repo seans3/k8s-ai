@@ -172,9 +172,9 @@ spec:
               - containerPort: 9000
               resources:
                 requests:
-                  google.com/tpu: 8
+                  google.com/tpu: "8"
                 limits:
-                  google.com/tpu: 8
+                  google.com/tpu: "8"
             - name: jetstream-http
               image: us-docker.pkg.dev/cloud-tpu-images/inference/jetstream-http:v0.2.2
               ports:
