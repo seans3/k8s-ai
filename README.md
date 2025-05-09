@@ -24,4 +24,4 @@
 
 ## Single Custom Resource Versions of vLLM and Jetstream AI Inference
 
-[AI Inference on GKE using KRO/KCC](./kro-kcc/README.md)
+[AI Inference on GKE using KRO/KCC](./kcc-kro/README.md)
