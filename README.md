@@ -21,3 +21,7 @@
 - Model: Gemma 3 (7 Billion Parameters)
   - File: gemma-3-7b-it
   - Model Repo: [Kaggle](https://www.kaggle.com/models/google/gemma)
+
+## Single Custom Resource Versions of vLLM and Jetstream AI Inference
+
+[AI Inference on GKE using KRO/KCC](./kro-kcc/README.md)
