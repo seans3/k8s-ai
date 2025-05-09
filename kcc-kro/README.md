@@ -33,7 +33,7 @@ kubectl get service -n ${NAMESPACE}
 Ensure the name of the service is `gemma-l4` and the container port is `8081`. Then start the port-forward from the local port to the container port.
 
 ```bash
-kubectl port-forward svc/gemma-l4 8081:8081
+kubectl port-forward svc/gemma-l4 -n ${NAMESPACE} 8081:8081
 ```
 
 #### Run curl command to query inference server
@@ -101,7 +101,7 @@ kubectl get service -n ${NAMESPACE}
 Ensure the name of the service is `gemma-tpu` and the container port is `8000`. Then start the port-forward from the local port to the container port.
 
 ```bash
-kubectl port-forward svc/gemma-tpu 8000:8000
+kubectl port-forward svc/gemma-tpu -n ${NAMESPACE} 8000:8000
 ```
 
 #### Run curl command to query inference server
