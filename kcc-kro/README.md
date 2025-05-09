@@ -38,7 +38,7 @@ EOF
 
 This custom resource should perform the following steps:
 
-1. Create IAM resources necessary.
+1. Create necessary IAM resources.
 2. Create a GCS bucket used to communicate the model between the transformation job and the deployment servers.
 3. Start the job necessary to transform the Gemma model on Kaggle into the format necessary for the Jetstream AI inference server.
 4. Start the Jetstream AI inference server deployment.
@@ -58,9 +58,9 @@ kubectl get service -n ${NAMESPACE}
 ```
 
 
-## Query the TPU AI Inference Server
+### Query the TPU AI Inference Server
 
-### Port-Forward from local port to inference container port
+#### Port-Forward from local port to inference container port
 
 Ensure the name of the service is `gemma-tpu` and the container port is `8000`. Then start the port-forward from the local port to the container port.
 
@@ -68,7 +68,7 @@ Ensure the name of the service is `gemma-tpu` and the container port is `8000`. 
 kubectl port-forward svc/gemma-tpu 8000:8000
 ```
 
-### Run curl command to query inference server
+#### Run curl command to query inference server
 
 Run a curl command pointed at the local port `8000`
 
