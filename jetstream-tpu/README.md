@@ -165,23 +165,17 @@ With the model converted, deploy the JetStream server.
     ```
 
 4.  **Interact with the Model using `curl`:**
-    Assuming JetStream exposes an OpenAI-compatible HTTP endpoint:
+    JetStream exposes HTTP endpoint:
     ```bash
-    curl http://localhost:8080/v1/chat/completions \
-        -H "Content-Type: application/json" \
-        -d '{
-            "model": "'"$MODEL_NAME"'",
-            "messages": [
-                {
-                    "role": "user",
-                    "content": "What are the main components of a Transformer model?"
-                }
-            ],
-            "temperature": 0.7,
-            "top_p": 1.0,
-            "n": 1,
-            "max_tokens": 256
-        }'
+    curl --request POST \
+    --header "Content-type: application/json" \
+    -s \
+    localhost:8000/generate \
+    --data \
+    '{
+        "prompt": "What are the top 5 programming languages",
+        "max_tokens": 200
+    }'
     ```
 
 ## V. Observe and Troubleshoot
