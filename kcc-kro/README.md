@@ -1,6 +1,6 @@
 # AI Inference on GKE using KCC and KRO
 
-Please follow the [pre requisites](prerequisite.md) to setup the inference cluster
+Please follow the [prerequisites](prerequisite.md) to setup the inference cluster
 
 ## VLLM/GPU/Gemma 3 1B/Hugging Face
 
@@ -18,6 +18,42 @@ spec:               ## TODO KRO/BUG: Requires .spec.replicas even if all spec fi
 EOF
 ```
 
+Verify resources were created:
+
+```bash
+kubectl get deployment -n ${NAMESPACE}
+kubectl get service -n ${NAMESPACE}
+
+```
+
+### Query the vLLM/NVidia L4 AI Inference Server
+
+#### Port-Forward from local port to inference container port
+
+Ensure the name of the service is `gemma-l4` and the container port is `8081`. Then start the port-forward from the local port to the container port.
+
+```bash
+kubectl port-forward svc/gemma-l4 8081:8081
+```
+
+#### Run curl command to query inference server
+
+Run a curl command pointed at the local port `8081`
+
+```bash
+curl http://127.0.0.1:8081/v1/chat/completions \
+-X POST \
+-H "Content-Type: application/json" \
+-d '{
+    "model": "google/gemma-3-1b-it",
+    "messages": [
+        {
+          "role": "user",
+          "content": "Why is the sky blue?"
+        }
+    ]
+}'
+```
 
 
 ## Jetstream/TPU/Gemma 3 7B/Kaggle
