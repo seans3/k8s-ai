@@ -11,16 +11,3 @@ spec:
     - protocol: HTTP # Or HTTPS for production
       port: 80 # Or 443 for HTTPS
       name: http
----
-apiVersion: networking.gke.io/v1
-kind: GCPGatewayPolicy
-metadata:
-  name: ai-inf-gateway-policy
-  namespace: default
-spec:
-  default:
-    allowGlobalAccess: true
-  targetRef:
-    group: gateway.networking.k8s.io
-    kind: Gateway
-    name: blue-green-gateway
