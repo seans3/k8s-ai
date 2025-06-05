@@ -8,7 +8,11 @@ spec:
     kind: Gateway
     name: blue-green-gateway
   rules:
-  - backendRefs:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /
+    backendRefs:
     - group: ""
       kind: Service
       name: blue-llm-service
@@ -19,15 +23,9 @@ spec:
       name: green-llm-service
       port: 8086
       weight: 0
-    filters: # CORRECT PLACEMENT
+    filters:
     - type: ResponseHeaderModifier
       responseHeaderModifier:
-        add:
-        - name: X-Deployment-Color
-          value: blue
-        - name: X-App-Version
-          value: v1.0
-    matches:
-    - path:
-        type: PathPrefix
-        value: /
+        set:
+        - name: X-Response-Service
+          value: blue-service
