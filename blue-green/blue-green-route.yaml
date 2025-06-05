@@ -1,0 +1,33 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: blue-green-route
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: blue-green-gateway
+  rules:
+  - backendRefs:
+    - group: ""
+      kind: Service
+      name: blue-llm-service
+      port: 8085
+      weight: 100
+    - group: ""
+      kind: Service
+      name: green-llm-service
+      port: 8086
+      weight: 0
+    filters: # CORRECT PLACEMENT
+    - type: ResponseHeaderModifier
+      responseHeaderModifier:
+        add:
+        - name: X-Deployment-Color
+          value: blue
+        - name: X-App-Version
+          value: v1.0
+    matches:
+    - path:
+        type: PathPrefix
+        value: /
