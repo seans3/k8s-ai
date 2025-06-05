@@ -1,0 +1,23 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: vllm-gemma-route
+spec:
+  parentRefs:
+  - name: ai-inf-gateway
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /
+    backendRefs:
+    - name: vllm-gemma-server-ip
+      group: inference.networking.x-k8s.io
+      kind: InferencePool
+  # - matches:
+  #   - path:
+  #       type: PathPrefix
+  #       value: /
+  #   backendRefs:
+  #   - name: llm-service
+  #     port: 8000

@@ -1,0 +1,13 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: ai-inf-gateway
+  annotations:
+    networking.gke.io/internal-address-access-mode: global
+spec:
+  gatewayClassName: gke-l7-regional-external-managed
+  # gatewayClassName: gke-l7-rilb
+  listeners:
+    - protocol: HTTP # Or HTTPS for production
+      port: 80 # Or 443 for HTTPS
+      name: http
