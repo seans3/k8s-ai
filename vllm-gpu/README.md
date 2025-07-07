@@ -83,8 +83,8 @@ Please see the [Prerequisites Guide](./prerequisites.md) for detailed instructio
 3.  **Accessing the Service (via Port Forwarding for Local Testing):**
     * Since `ClusterIP` services are not directly accessible externally, use `kubectl port-forward` to forward traffic from your local machine to the service within the cluster.
         ```bash
-        # Forward a local port (e.g., 8080) to the service port (e.g., 8000)
-        kubectl port-forward service/vllm-gemma-service 8080:8000 # Adjust service name, local port, and service port as needed
+        # Forward a local port (e.g., 8080) to the service port (e.g., 8081)
+        kubectl port-forward service/vllm-service 8080:8081 # Adjust service name, local port, and service port as needed
         ```
         Now, requests to `localhost:8080` on your machine will be forwarded to port `8000` on the `vllm-gemma-service` inside GKE.
 4.  **Interact with the Model:**
