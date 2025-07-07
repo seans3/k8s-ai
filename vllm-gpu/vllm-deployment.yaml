@@ -44,7 +44,7 @@ spec:
           valueFrom:
             secretKeyRef:
               name: hf-secret
-              key: hf_api_token
+              key: hf_token
         volumeMounts:
         - mountPath: /dev/shm
           name: dshm
