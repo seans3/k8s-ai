@@ -35,9 +35,9 @@ Please see the [Prerequisites Guide](./prerequisites.md) for detailed instructio
         * `spec.template.spec.containers`:
             * `image`: The vLLM Docker image (eg. pytorch-vllm-serve)
             * `env`: Environment variables, including `HF_TOKEN` (mounted from the secret).
-            * `args`: Command-line arguments for the vLLM server, such as `--model`, model name, `--port 8000`, and potentially `--tensor-parallel-size`.
+            * `args`: Command-line arguments for the vLLM server, such as `--model`, model name, `--port 8081`, and potentially `--tensor-parallel-size`.
             * `resources.limits`: **Crucially, specify the GPU resources required (e.g., `nvidia.com/gpu: "1"`)**. This tells Autopilot to provision a node with the requested GPU type for this pod. You might also need to add a `nodeSelector` for the specific GPU type if not using default Autopilot GPU classes (e.g., `cloud.google.com/gke-accelerator: nvidia-l4`).
-            * `ports.containerPort`: The port vLLM listens on (typically 8000).
+            * `ports.containerPort`: The port vLLM listens on.
             * Readiness and Liveness probes to ensure pod health.
 2.  **Apply the Deployment Manifest:**
     * Deploy vLLM to your GKE cluster using `kubectl`:
@@ -64,7 +64,7 @@ Please see the [Prerequisites Guide](./prerequisites.md) for detailed instructio
         INFO:     Started server process [13]
         INFO:     Waiting for application startup.
         INFO:     Application startup complete.
-        Default STARTUP TCP probe succeeded after 1 attempt for container "vllm--google--gemma-3-1b-it-1" on port 8000.
+        Default STARTUP TCP probe succeeded after 1 attempt for container "vllm--google--gemma-3-1b-it-1" on port 8081.
         ```
 
 ## III. Serve the Model (Expose and Interact)
@@ -75,7 +75,7 @@ Please see the [Prerequisites Guide](./prerequisites.md) for detailed instructio
     * **Key configurations in this file include:**
         * `type: ClusterIP`: This makes the service reachable only from within the GKE cluster. For local testing/development, you will typically use `kubectl port-forward`.
         * `spec.selector`: Must match the labels of your vLLM deployment's pods.
-        * `spec.ports`: Define the port the service listens on (e.g., `port: 8000`) and the `targetPort` (the container port of vLLM, usually 8000, or its named port).
+        * `spec.ports`: Define the port the service listens on (e.g., `port: 8081`) and the `targetPort` (the container port of vLLM, in this case also 8081, or its named port).
 2.  **Apply the Service Manifest:**
     ```bash
     kubectl apply -f vllm-service.yaml
@@ -86,7 +86,7 @@ Please see the [Prerequisites Guide](./prerequisites.md) for detailed instructio
         # Forward a local port (e.g., 8080) to the service port (e.g., 8081)
         kubectl port-forward service/vllm-service 8080:8081 # Adjust service name, local port, and service port as needed
         ```
-        Now, requests to `localhost:8080` on your machine will be forwarded to port `8000` on the `vllm-gemma-service` inside GKE.
+        Now, requests to `localhost:8080` on your machine will be forwarded to port `8081` on the `vllm-service` inside GKE.
 4.  **Interact with the Model:**
     * **Using `curl` (via port-forward):** Send HTTP POST requests to `localhost` on the port you forwarded.
         ```bash
@@ -97,7 +97,7 @@ Please see the [Prerequisites Guide](./prerequisites.md) for detailed instructio
             "messages": [{"role": "user", "content": "Explain Quantum Computing in simple terms."}]
         }'
         ```
-    * **(Optional) Gradio Interface:** If the tutorial includes a Gradio UI, it would typically be deployed as another service within the cluster that communicates with the `vllm-gemma-service` (ClusterIP). You would then port-forward to the Gradio service to access its UI.
+    * **(Optional) Gradio Interface:** If the tutorial includes a Gradio UI, it would typically be deployed as another service within the cluster that communicates with the `vllm-service` (ClusterIP). You would then port-forward to the Gradio service to access its UI.
 
 ## IV. Observe and Troubleshoot
 
@@ -109,7 +109,7 @@ Please see the [Prerequisites Guide](./prerequisites.md) for detailed instructio
 
 * Delete the Kubernetes resources:
     ```bash
-    kubectl delete service vllm-gemma-service # Adjust name
+    kubectl delete service vllm-service # Adjust name
     kubectl delete deployment vllm-gemma-deployment # Adjust name
     kubectl delete secret hf-secret
     ```
