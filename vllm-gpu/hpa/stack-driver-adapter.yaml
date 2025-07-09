@@ -1,3 +1,17 @@
+# Config for resources for custom metrics stackdriver
+# adapter. This adapter is necessary for the HPA to
+# retrieve custom metrics in managed prometheus in GKE.
+#
+# In addition to a deployment/service for the adapter,
+# there are service accounts, roles, and bindings
+# for the adapter. But this adapter will *not* have
+# sufficient privileges to view the metrics in the
+# managed prometheus repository unless a GCP
+# service account is connected to the k8s service
+# account through workload identity. Additionally,
+# the GCP service account *must* have the
+# "monitoring/viewer" IAM permission. Lookup how
+# to set up workload identity.
 apiVersion: v1
 kind: Namespace
 metadata:
