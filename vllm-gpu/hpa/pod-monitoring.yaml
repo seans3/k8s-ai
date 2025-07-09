@@ -1,12 +1,16 @@
+# Custom resource to scape metrics into managed
+# Prometheus for GKE.
 apiVersion: monitoring.googleapis.com/v1
 kind: PodMonitoring
 metadata:
   name: gemma-pod-monitoring
 spec:
   selector:
+    # Label on workload pods for metrics scraping.
     matchLabels:
       app: gemma-server
   endpoints:
+  # TODO: port change to a named port (on deployment) for reliability.
   - port: 8081
     path: /metrics
     interval: 15s
