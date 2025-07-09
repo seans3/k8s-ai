@@ -3,22 +3,17 @@ kind: PodMonitoring
 metadata:
   name: nvidia-dcgm-exporter-for-hpa
   namespace: default
-  # namespace: gke-managed-system
-  labels:
-    app.kubernetes.io/name: nvidia-dcgm-exporter
-    app.kubernetes.io/part-of: google-cloud-managed-prometheus
 spec:
   selector:
     matchLabels:
+      # This selector targets the DCGM exporter pods.
       app.kubernetes.io/name: gke-managed-dcgm-exporter
   endpoints:
-    - port: metrics
-      interval: 15s
-      metricRelabeling:
-        - action: keep
-          sourceLabels: [__name__]
-        - action: replace
-          sourceLabels: [__name__]
-          targetLabel: __name__
-          regex: DCGM_FI_DEV_GPU_UTIL
-          replacement: dcgm_fi_dev_gpu_util
+  - port: metrics
+    interval: 15s
+    metricRelabeling:
+    - sourceLabels: [__name__]
+      regex: 'DCGM_FI_DEV_GPU_UTIL'
+      action: replace
+      replacement: 'dcgm_fi_dev_gpu_util'
+      targetLabel: '__name__'
