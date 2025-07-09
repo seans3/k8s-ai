@@ -1,3 +1,11 @@
+# Scrapes *and* translates the nvidia gpu metric
+# into the managed prometheus repository. Must be
+# cluster pod monitoring because the targeted
+# dcgm export pods live in the gke-managed-system
+# namespace, and we can not set up a pod monitoring
+# resource (or any resource) in that restricted
+# namespace. This resource is necessary to lower-case
+# gpu metric, since upper-case metrics do not work.
 apiVersion: monitoring.googleapis.com/v1
 kind: ClusterPodMonitoring
 metadata:
@@ -10,6 +18,7 @@ spec:
   endpoints:
   - port: metrics
     interval: 15s
+    # Must relabel metric to lower-case for HPA (known bug).
     metricRelabeling:
     - sourceLabels: [__name__]
       regex: 'DCGM_FI_DEV_GPU_UTIL'
