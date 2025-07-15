@@ -179,6 +179,8 @@ I0715 18:34:57.743218       1 filter_builder.go:258] Query with filter(s): "metr
 
 ## III. Deploy Horizontal Pod Autoscaler
 
+### Deploy the HPA
+
 Create the horizontal pod autoscaler (HPA), to scale the AI inference
 server. This HPA targets the AI inference `Deployment` named
 `vllm-gemma-deployment`, with a pod replica range of 1 to 5 pods.
