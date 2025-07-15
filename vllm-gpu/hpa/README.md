@@ -9,12 +9,37 @@ you already have the vLLM AI inference server running from this
 
 ## I. Verify vLLM AI Inference Server Metrics
 
+Forward requests sent to local port `8081` to `llm-service` service
+listening on port `8081` within the cluster.
+
+```
+$ kubectl port-forward service/llm-service 8081:8081
+Forwarding from 127.0.0.1:8081 -> 8081
+Forwarding from [::1]:8081 -> 8081
+...
+```
+
+Next, in another terminal request the metrics endpoint for the vLLM inference
+server by sending a `curl` request to local port `8081`, and filter the response
+for the `num_requests_*` metrics.
+
+```
+$ curl -sS http://localhost:8081/metrics | grep num_requests_
+# HELP vllm:num_requests_running Number of requests currently running on GPU.
+# TYPE vllm:num_requests_running gauge
+vllm:num_requests_running{model_name="google/gemma-3-1b-it"} 0.0
+# HELP vllm:num_requests_swapped Number of requests swapped to CPU. DEPRECATED: KV cache offloading is not used in V1
+# TYPE vllm:num_requests_swapped gauge
+vllm:num_requests_swapped{model_name="google/gemma-3-1b-it"} 0.0
+# HELP vllm:num_requests_waiting Number of requests waiting to be processed.
+# TYPE vllm:num_requests_waiting gauge
+vllm:num_requests_waiting{model_name="google/gemma-3-1b-it"} 0.0
+```
 
 ## II. Collect Metrics into Managed Prometheus
 
-The first step is ensure the necessary metrics are being collected. We
-use either a `ClusterPodMonitoring` or `PodMonitoring` (namespaced)
-custom resource.
+Ensure the necessary metrics are being collected. We use either a
+`ClusterPodMonitoring` or `PodMonitoring` (namespaced) custom resource.
 
 ### Collect vLLM metrics
 
@@ -69,7 +94,7 @@ Events:                    <none>
 
 Also, verify the metrics are being collected into GKE Prometheus by
 using the gcloud console `Metrics explorer` within the
-`Observability Monitoring` section.
+`Observability Monitoring` section. Filter using the term `vllm`.
 
 ### Collect NVidia GPU metrics
 
