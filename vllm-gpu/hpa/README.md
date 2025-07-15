@@ -71,6 +71,57 @@ I0715 18:34:57.743218       1 filter_builder.go:258] Query with filter(s): "metr
 
 ## III. Deploy Horizontal Pod Autoscaler
 
+Create the horizontal pod autoscaler (HPA), to scale the AI inference
+server.
+
+```
+$ kubectl apply -f ./horizontal-pod-autoscaler.yaml
+```
+
+### Verify the HPA
+
+Validate the metric the HPA is using to scale. In the next example,
+the `prometheus.googleapis.com` part means the metric lives in GKE
+Prometheus, while the `vllm:num_requests_running` is the metric
+from the `vllm` AI inference server named `num_requests_running`. This
+metric is of type `gauge`. Also, check the `ValidMetricFound` event.
+
+```
+$ kubectl describe hpa/gemma-server-hpa
+Name:                                                                   gemma-server-hpa
+Namespace:                                                              default
+Labels:                                                                 <none>
+Annotations:                                                            <none>
+CreationTimestamp:                                                      Tue, 08 Jul 2025 18:15:27 +0000
+Reference:                                                              Deployment/vllm-gemma-deployment
+Metrics:                                                                ( current / target )
+  "prometheus.googleapis.com|vllm:num_requests_running|gauge" on pods:  0 / 4
+Min replicas:                                                           1
+Max replicas:                                                           5
+Behavior:
+  Scale Up:
+    Stabilization Window: 0 seconds
+    Select Policy: Max
+    Policies:
+      - Type: Pods     Value: 4    Period: 15 seconds
+      - Type: Percent  Value: 100  Period: 15 seconds
+  Scale Down:
+    Stabilization Window: 30 seconds
+    Select Policy: Max
+    Policies:
+      - Type: Percent  Value: 100  Period: 15 seconds
+Deployment pods:       1 current / 1 desired
+Conditions:
+  Type            Status  Reason            Message
+  ----            ------  ------            -------
+  AbleToScale     True    ReadyForNewScale  recommended size matches current size
+  ScalingActive   True    ValidMetricFound  the HPA was able to successfully calculate a replica count from pods metric prometheus.googleapis.com|vllm:num_requests_running|gauge
+  ScalingLimited  True    TooFewReplicas    the desired replica count is less than the minimum replica count
+Events:           <none>
+```
+
 ## IV. Test
+
+
 
 ## V. Cleanup
