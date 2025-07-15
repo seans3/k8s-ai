@@ -52,6 +52,15 @@ $ kubectl annotate serviceaccount \
     iam.gke.io/gcp-service-account=metrics-adapter-gsa@seans-devel.iam.gserviceaccount.com
 ```
 
+Verify StackDriver adapter is working (check the name of the stackdriver-adapter pod first)
+
+```
+# Verify the stackdriver adapter now works, and has no permissions issues
+$ kubectl logs -f po/custom-metrics-stackdriver-adapter-658f5968bd-nkmk2 --namespace custom-metrics
+
+I0715 18:34:57.743218       1 filter_builder.go:258] Query with filter(s): "metric.labels.pod = \"vllm-gemma-deployment-69bc477d85-qmg2v\" AND metric.type = \"prometheus.googleapis.com/vllm:num_requests_running/gauge\" AND resource.labels.cluster = \"seans-gpu-hpa\" AND resource.labels.location = \"us-central1\" AND resource.labels.namespace = \"default\" AND resource.labels.project_id = \"seans-devel\" AND resource.type = \"prometheus_target\""
+```
+
 ## III. Deploy Horizontal Pod Autoscaler
 
 ## IV. Test
