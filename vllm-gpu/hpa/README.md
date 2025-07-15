@@ -70,7 +70,42 @@ using the gcloud console `Metrics explorer` within the
 
 ### B. Collect NVidia GPU metrics
 
-ClusterPodMonitoring custom resource to scrape NVidia DCMG metric exporter
+The ClusterPodMonitoring custom resource will scrape NVidia GPU metrics
+into GKE Prometheus. This workload *must* be cluster-scoped, because
+the pods that it scrapes are in a protected namespace --
+`gke-managed-system`. These scraped pods are from an NVidia metrics
+exporter workload.
+
+```
+# First, verify the nvidia metrics exporter is running.
+$ kubectl get all --namespace gke-managed-system
+NAME                      READY   STATUS    RESTARTS   AGE
+pod/dcgm-exporter-5vdk9   1/1     Running   0          8d
+
+NAME                           DESIRED   CURRENT   READY   UP-TO-DATE   AVAILABLE   NODE SELECTOR   AGE
+daemonset.apps/dcgm-exporter   1         1         1       1            1           <none>          8d
+```
+
+Next, deploy the ClusterPodMonitoring resource. Notice that this resource
+translates the nvidia metrics names into lower-case. This is necessary
+because of a metrics bug.
+
+```
+$ kubectl apply -f ./gpu-pod-monitoring.yaml
+```
+
+Validate the NVIDIA GPU metrics are being collected into GKE
+Prometheus by viewing the `Metrics explorer` in the gcloud
+console. Attempt to filter by `dcgm`, and you should be able
+to see the following metric: `dcgm_fi_dev_gpu_util`. This metric
+represents the percentage of time over the last sample period
+(typically one second) that one or more compute kernels were
+actively executing on the GPU. In simpler terms, it tells you
+how busy the GPU's processing cores were. A value of 100 means
+the GPU was constantly running compute tasks during the last
+interval, while a value of 0 means it was idle. It is one of
+the most common metrics for determining if a workload is
+"GPU-bound" or if GPUs are being underutilized.
 
 ## II. Deploy Stackdriver Adapter
 
