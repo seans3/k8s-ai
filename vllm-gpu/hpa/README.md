@@ -267,6 +267,53 @@ Events:           <none>
 
 ## V. Test
 
+Forward requests sent to local port `8081` to `llm-service` service
+listening on port `8081` within the cluster.
+
+```
+$ kubectl port-forward service/llm-service 8081:8081
+Forwarding from 127.0.0.1:8081 -> 8081
+Forwarding from [::1]:8081 -> 8081
+...
+```
+
+Within another terminal run AI requests in a loop to load
+the GPU, and see if the HPA is scaling the inference deployment.
+
+```
+$ ./request-looper.sh
+Starting request loop...
+  PORT: 8081
+  MODEL: google/gemma-3-1b-it
+  CONTENT: Explain Quantum Computing in simple terms.
+Press Ctrl+C to stop.
+----------------------------------------
+Sending request at Tue Jul 15 10:26:21 PM UTC 2025
+----------------------------------------
+Sending request at Tue Jul 15 10:26:22 PM UTC 2025
+----------------------------------------
+Sending request at Tue Jul 15 10:26:23 PM UTC 2025
+...
+```
+
+Check the HPA
+
+```
+$ kubectl describe hpa/gemma-serve-hpa
+...
+Events:
+  Type    Reason             Age                    From                       Message
+  ----    ------             ----                   ----                       -------
+  Normal  SuccessfulRescale  2m50s (x3 over 6d23h)  horizontal-pod-autoscaler  New size: 3; reason: pods metric prometheus.googleapis.com|vllm:num
+```
+
+The following shows the deployment has scaled from 1 to 3 replicas.
+
+```
+$ kubectl get deploy/vllm-gemma-deployment
+NAME                    READY   UP-TO-DATE   AVAILABLE   AGE
+vllm-gemma-deployment   3/3     3            1           8d
+```
 
 
 ## VI. Cleanup
