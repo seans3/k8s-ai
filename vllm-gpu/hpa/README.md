@@ -27,6 +27,31 @@ ClusterPodMonitoring custom resource to scrape NVidia DCMG metric exporter
 
 ### A. Use Workload Identity to give permission to view metrics
 
+Assuming project is `seans-devel`, creating workload identity by creating
+a gcloud service account `metrics-adapte-gsa` to give workloads permissons
+to view metrics within gcloud is the following:
+
+```
+$ gcloud iam service-accounts create metrics-adapter-gsa \
+--project=seans-devel \
+--display-name="Metrics Adapter GSA"
+
+$ gcloud projects add-iam-policy-binding seans-dev \
+--member="serviceAccount:metrics-adapter-gsa@seans-devel.iam.gserviceaccount.com" \
+--role="roles/monitoring.viewer"
+
+$ gcloud iam service-accounts add-iam-policy-binding \
+    metrics-adapter-gsa@seans-devel.iam.gserviceaccount.com \
+    --project=seans-devel \
+    --role="roles/iam.workloadIdentityUser" \
+--member="serviceAccount:seans-devel.svc.id.goog[custom-metrics/custom-metrics-stackdriver-adapter]"
+
+$ kubectl annotate serviceaccount \
+    custom-metrics-stackdriver-adapter \
+    --namespace custom-metrics \
+    iam.gke.io/gcp-service-account=metrics-adapter-gsa@seans-devel.iam.gserviceaccount.com
+```
+
 ## III. Deploy Horizontal Pod Autoscaler
 
 ## IV. Test
