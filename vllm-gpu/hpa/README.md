@@ -13,7 +13,7 @@ The first step is ensure the necessary metrics are being collected. We
 use either a `ClusterPodMonitoring` or `PodMonitoring` (namespaced)
 custom resource.
 
-### A. Collect vLLM metrics
+### Collect vLLM metrics
 
 Create the `PodMonitoring` custom resource within the `default` namespace,
 which sends metrics from pods with the `gemma-server` label to
@@ -68,7 +68,7 @@ Also, verify the metrics are being collected into GKE Prometheus by
 using the gcloud console `Metrics explorer` within the
 `Observability Monitoring` section.
 
-### B. Collect NVidia GPU metrics
+### Collect NVidia GPU metrics
 
 The `ClusterPodMonitoring` custom resource will scrape NVidia GPU metrics
 into GKE Prometheus. This workload *must* be cluster-scoped, because
@@ -107,7 +107,9 @@ interval, while a value of 0 means it was idle. It is one of
 the most common metrics for determining if a workload is
 "GPU-bound" or if GPUs are being underutilized.
 
-## II. Deploy Stackdriver Adapter
+## II. Stackdriver Adapter for viewing metrics in GKE Prometheus
+
+### Deploy StackDriver Adapter
 
 The metric stackdriver adapter allows the Horizontal Pod Autoscaler to
 view/retrieve the previously collected metrics in Prometheus. This adapter
