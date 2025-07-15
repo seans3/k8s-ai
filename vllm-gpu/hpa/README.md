@@ -83,9 +83,26 @@ next step).
 $ kubectl apply -f ./stack-driver-adapter.yaml
 ```
 
-### A. Use Workload Identity to give permission to view metrics
+Verify the stack driver adapter workloads are deployed
 
-Assuming project is `seans-devel`, creating workload identity by creating
+```
+$ kubectl get all --namespace custom-metrics
+NAME                                                      READY   STATUS    RESTARTS          AGE
+pod/custom-metrics-stackdriver-adapter-658f5968bd-nkmk2   1/1     Running   281 (6d23h ago)   7d23h
+
+NAME                                         TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)   AGE
+service/custom-metrics-stackdriver-adapter   ClusterIP   34.118.227.38   <none>        443/TCP   8d
+
+NAME                                                 READY   UP-TO-DATE   AVAILABLE   AGE
+deployment.apps/custom-metrics-stackdriver-adapter   1/1     1            1           8d
+
+NAME                                                            DESIRED   CURRENT   READY   AGE
+replicaset.apps/custom-metrics-stackdriver-adapter-658f5968bd   1         1         1       8d
+```
+
+### Use Workload Identity to give permission to view metrics
+
+Assuming project is `seans-devel`, enable workload identity by creating
 a gcloud service account `metrics-adapte-gsa` to give workloads permissons
 to view metrics within gcloud is the following:
 
@@ -110,10 +127,14 @@ $ kubectl annotate serviceaccount \
     iam.gke.io/gcp-service-account=metrics-adapter-gsa@seans-devel.iam.gserviceaccount.com
 ```
 
-Verify StackDriver adapter is working (check the name of the stackdriver-adapter
-pod first)
+### Verify StackDriver adapter is working
 
 ```
+# First, discover the name of the stack driver adapter pod.
+$ kubectl get po --namespace custom-metrics
+NAME                                                  READY   STATUS    RESTARTS          AGE
+custom-metrics-stackdriver-adapter-658f5968bd-nkmk2   1/1     Running   281 (6d23h ago)   7d23h
+
 # Verify the stackdriver adapter now works, and has no permissions issues
 $ kubectl logs -f po/custom-metrics-stackdriver-adapter-658f5968bd-nkmk2 --namespace custom-metrics
 
