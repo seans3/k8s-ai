@@ -3,12 +3,12 @@
 # This script sends a POST request to a local LLM endpoint every second
 # without waiting for a response. It runs until manually stopped by pressing Ctrl+C.
 #
-# Usage: ./request_looper.sh [PORT] [MODEL_NAME] ["MESSAGE CONTENT"]
+# Usage: ./request-looper.sh [PORT] [MODEL_NAME] ["MESSAGE CONTENT"]
 #
 # Examples:
-#   ./request_looper.sh
-#   ./request_looper.sh 8082
-#   ./request_looper.sh 8082 "google/gemma-2b" "What is the capital of France?"
+#   ./request-looper.sh
+#   ./request-looper.sh 8082
+#   ./request-looper.sh 8082 "google/gemma-2b" "What is the capital of France?"
 
 # --- Configuration (with defaults) ---
 # Use command-line arguments if provided, otherwise use defaults.
