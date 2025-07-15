@@ -23,7 +23,14 @@ ClusterPodMonitoring custom resource to scrape NVidia DCMG metric exporter
 
 ## II. Deploy Stackdriver Adapter
 
-..so HPA can retrieve the previously collected metrics
+The metric stackdriver adapter allows the Horizontal Pod Autoscaler to
+view/retrieve the previously collected metrics in Prometheus. This adapter
+does *not* have permissions (yet) to view metrics in Prometheus (see
+next step).
+
+```
+$ kubectl apply -f ./stack-driver-adapter.yaml
+```
 
 ### A. Use Workload Identity to give permission to view metrics
 
@@ -52,7 +59,8 @@ $ kubectl annotate serviceaccount \
     iam.gke.io/gcp-service-account=metrics-adapter-gsa@seans-devel.iam.gserviceaccount.com
 ```
 
-Verify StackDriver adapter is working (check the name of the stackdriver-adapter pod first)
+Verify StackDriver adapter is working (check the name of the stackdriver-adapter
+pod first)
 
 ```
 # Verify the stackdriver adapter now works, and has no permissions issues
