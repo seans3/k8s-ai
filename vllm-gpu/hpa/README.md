@@ -15,7 +15,58 @@ custom resource.
 
 ### A. Collect vLLM metrics
 
-PodMonitoring custom resource
+Create the PodMonitoring custom resource within the default namespace,
+which sends metrics from pods with the `gemma-server` label to
+GKE Prometheus. These metrics are configured to be found at the
+`/metrics` endpoint of a server on port `8081`.
+
+```
+$ kubectl apply -f pod-monitoring.yaml
+```
+
+Verify the creation worked, especially checking the status condition
+is `ConfigurationCreateSuccess`.
+
+```
+$ kubectl describe podmonitoring/gemma-pod-monitoring
+Name:         gemma-pod-monitoring
+Namespace:    default
+Labels:       <none>
+Annotations:  <none>
+API Version:  monitoring.googleapis.com/v1
+Kind:         PodMonitoring
+Metadata:
+  Creation Timestamp:  2025-07-07T19:41:21Z
+  Generation:          2
+  Resource Version:    1752013134641247019
+  UID:                 fa94b4b2-6742-4b9b-aa64-b376d98c2124
+Spec:
+  Endpoints:
+    Interval:  15s
+    Path:      /metrics
+    Port:      8081
+  Selector:
+    Match Labels:
+      App:  gemma-server
+  Target Labels:
+    Metadata:
+      pod
+      container
+      top_level_controller_name
+      top_level_controller_type
+Status:
+  Conditions:
+    Last Transition Time:  2025-07-07T19:41:21Z
+    Last Update Time:      2025-07-08T22:18:54Z
+    Status:                True
+    Type:                  ConfigurationCreateSuccess
+  Observed Generation:     2
+Events:                    <none>
+```
+
+Also, verify the metrics are being collected into GKE Prometheus by
+using the gcloud console `Metrics explorer` within the
+`Observability Monitoring` section.
 
 ### B. Collect NVidia GPU metrics
 
