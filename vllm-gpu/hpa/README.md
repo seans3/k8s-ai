@@ -7,7 +7,10 @@ which is automatically enabled for GKE clusters >= v1.27. We assume
 you already have the vLLM AI inference server running from this
 [exercise](../README.md), in the parent directory.
 
-## I. Collect Metrics into Managed Prometheus
+## I. Verify vLLM AI Inference Server Metrics
+
+
+## II. Collect Metrics into Managed Prometheus
 
 The first step is ensure the necessary metrics are being collected. We
 use either a `ClusterPodMonitoring` or `PodMonitoring` (namespaced)
@@ -107,7 +110,7 @@ interval, while a value of 0 means it was idle. It is one of
 the most common metrics for determining if a workload is
 "GPU-bound" or if GPUs are being underutilized.
 
-## II. Stackdriver Adapter for viewing metrics in GKE Prometheus
+## III. Stackdriver Adapter for viewing metrics in GKE Prometheus
 
 ### Deploy StackDriver Adapter
 
@@ -179,7 +182,7 @@ $ kubectl logs -f po/custom-metrics-stackdriver-adapter-658f5968bd-nkmk2 --names
 I0715 18:34:57.743218       1 filter_builder.go:258] Query with filter(s): "metric.labels.pod = \"vllm-gemma-deployment-69bc477d85-qmg2v\" AND metric.type = \"prometheus.googleapis.com/vllm:num_requests_running/gauge\" AND resource.labels.cluster = \"seans-gpu-hpa\" AND resource.labels.location = \"us-central1\" AND resource.labels.namespace = \"default\" AND resource.labels.project_id = \"seans-devel\" AND resource.type = \"prometheus_target\""
 ```
 
-## III. Deploy Horizontal Pod Autoscaler
+## IV. Deploy Horizontal Pod Autoscaler
 
 ### Deploy the HPA
 
@@ -237,8 +240,8 @@ Conditions:
 Events:           <none>
 ```
 
-## IV. Test
+## V. Test
 
 
 
-## V. Cleanup
+## VI. Cleanup
