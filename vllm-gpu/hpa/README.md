@@ -15,7 +15,7 @@ custom resource.
 
 ### A. Collect vLLM metrics
 
-Create the PodMonitoring custom resource within the default namespace,
+Create the `PodMonitoring` custom resource within the `default` namespace,
 which sends metrics from pods with the `gemma-server` label to
 GKE Prometheus. These metrics are configured to be found at the
 `/metrics` endpoint of a server on port `8081`.
@@ -70,7 +70,7 @@ using the gcloud console `Metrics explorer` within the
 
 ### B. Collect NVidia GPU metrics
 
-The ClusterPodMonitoring custom resource will scrape NVidia GPU metrics
+The `ClusterPodMonitoring` custom resource will scrape NVidia GPU metrics
 into GKE Prometheus. This workload *must* be cluster-scoped, because
 the pods that it scrapes are in a protected namespace --
 `gke-managed-system`. These scraped pods are from an NVidia metrics
@@ -86,9 +86,9 @@ NAME                           DESIRED   CURRENT   READY   UP-TO-DATE   AVAILABL
 daemonset.apps/dcgm-exporter   1         1         1       1            1           <none>          8d
 ```
 
-Next, deploy the ClusterPodMonitoring resource. Notice that this resource
+Next, deploy the `ClusterPodMonitoring` resource. Notice that this resource
 translates the nvidia metrics names into lower-case. This is necessary
-because of a metrics bug.
+to overcome a metrics bug.
 
 ```
 $ kubectl apply -f ./gpu-pod-monitoring.yaml
@@ -118,7 +118,8 @@ next step).
 $ kubectl apply -f ./stack-driver-adapter.yaml
 ```
 
-Verify the stack driver adapter workloads are deployed
+Verify the stack driver adapter workloads are deployed in the
+`custom-metrics` namespace.
 
 ```
 $ kubectl get all --namespace custom-metrics
@@ -137,9 +138,9 @@ replicaset.apps/custom-metrics-stackdriver-adapter-658f5968bd   1         1     
 
 ### Use Workload Identity to give permission to view metrics
 
-Assuming project is `seans-devel`, enable workload identity by creating
+Assuming the project is `seans-devel`, enable workload identity by creating
 a gcloud service account `metrics-adapte-gsa` to give workloads permissons
-to view metrics within gcloud is the following:
+to view metrics within gcloud:
 
 ```
 $ gcloud iam service-accounts create metrics-adapter-gsa \
@@ -179,7 +180,12 @@ I0715 18:34:57.743218       1 filter_builder.go:258] Query with filter(s): "metr
 ## III. Deploy Horizontal Pod Autoscaler
 
 Create the horizontal pod autoscaler (HPA), to scale the AI inference
-server.
+server. This HPA targets the AI inference `Deployment` named
+`vllm-gemma-deployment`, with a pod replica range of 1 to 5 pods.
+The target metric is `prometheus.googleapis.com|vllm:num_requests_running|gauge`,
+which keeps track of the number of concurrent requests running
+withing the pods of the vLLM deployment. If the average of this metric
+exceeds 4, then a scale event happens.
 
 ```
 $ kubectl apply -f ./horizontal-pod-autoscaler.yaml
@@ -187,7 +193,7 @@ $ kubectl apply -f ./horizontal-pod-autoscaler.yaml
 
 ### Verify the HPA
 
-Validate the metric the HPA is using to scale. In the next example,
+Validate the metric the HPA is using to scale. From the targeted metric,
 the `prometheus.googleapis.com` part means the metric lives in GKE
 Prometheus, while the `vllm:num_requests_running` is the metric
 from the `vllm` AI inference server named `num_requests_running`. This
