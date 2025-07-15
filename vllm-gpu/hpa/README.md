@@ -21,7 +21,7 @@ GKE Prometheus. These metrics are configured to be found at the
 `/metrics` endpoint of a server on port `8081`.
 
 ```
-$ kubectl apply -f pod-monitoring.yaml
+$ kubectl apply -f ./pod-monitoring.yaml
 ```
 
 Verify the creation worked, especially checking the status condition
