@@ -30,9 +30,9 @@ NAME                           DESIRED   CURRENT   READY   UP-TO-DATE   AVAILABL
 daemonset.apps/dcgm-exporter   1         1         1       1            1           <none>          8d
 ```
 
-Next, deploy the `ClusterPodMonitoring` resource. Notice that this resource
-translates the nvidia metrics names into lower-case. This is necessary
-to overcome a metrics bug.
+Next, deploy the `ClusterPodMonitoring` resource. The following
+`gpu-rules.yaml` correctly translates the GPU metric to
+lower-case to avoid a known metrics bug.
 
 ```
 $ kubectl apply -f ./gpu-pod-monitoring.yaml
@@ -131,22 +131,18 @@ I0715 18:34:57.743218       1 filter_builder.go:258] Query with filter(s): "metr
 Create the horizontal pod autoscaler (HPA), to scale the AI inference
 server. This HPA targets the AI inference `Deployment` named
 `vllm-gemma-deployment`, with a pod replica range of 1 to 5 pods.
-The target metric is `prometheus.googleapis.com|vllm:num_requests_running|gauge`,
-which keeps track of the number of concurrent requests running
-withing the pods of the vLLM deployment. If the average of this metric
-exceeds 4, then a scale event happens.
+The target metric is `prometheus.googleapis.com|dcgm_fi_dev_gpu_util|gauge`.
+This metric ranges from 0 to 100. If the average of the metric exceeds
+the target threshold (currently 20), then the HPA will scale the inference
+server deployment.
 
 ```
-$ kubectl apply -f ./horizontal-pod-autoscaler.yaml
+$ kubectl apply -f ./gpu-horizontal-pod-autoscaler.yaml
 ```
 
 ### Verify the HPA
 
-Validate the metric the HPA is using to scale. From the targeted metric,
-the `prometheus.googleapis.com` part means the metric lives in GKE
-Prometheus, while the `vllm:num_requests_running` is the metric
-from the `vllm` AI inference server named `num_requests_running`. This
-metric is of type `gauge`. Also, check the `ValidMetricFound` event.
+Validate the metric the HPA is using to scale. Check the `ValidMetricFound` event.
 
 ```
 $ kubectl describe hpa/gemma-server-hpa
@@ -157,7 +153,7 @@ Annotations:                                                            <none>
 CreationTimestamp:                                                      Tue, 08 Jul 2025 18:15:27 +0000
 Reference:                                                              Deployment/vllm-gemma-deployment
 Metrics:                                                                ( current / target )
-  "prometheus.googleapis.com|vllm:num_requests_running|gauge" on pods:  0 / 4
+  "prometheus.googleapis.com|dcgm_fi_dev_gpu_util|gauge" on pods:       0 / 20
 Min replicas:                                                           1
 Max replicas:                                                           5
 Behavior:
@@ -177,7 +173,7 @@ Conditions:
   Type            Status  Reason            Message
   ----            ------  ------            -------
   AbleToScale     True    ReadyForNewScale  recommended size matches current size
-  ScalingActive   True    ValidMetricFound  the HPA was able to successfully calculate a replica count from pods metric prometheus.googleapis.com|vllm:num_requests_running|gauge
+  ScalingActive   True    ValidMetricFound  the HPA was able to successfully calculate a replica count from pods metric prometheus.googleapis.com|dcgm_fi_dev_gpu_util|gauge
   ScalingLimited  True    TooFewReplicas    the desired replica count is less than the minimum replica count
 Events:           <none>
 ```
@@ -216,12 +212,12 @@ Sending request at Tue Jul 15 10:26:23 PM UTC 2025
 Check the HPA
 
 ```
-$ kubectl describe hpa/gemma-serve-hpa
+$ kubectl describe hpa/gemma-serve-gpu-hpa
 ...
 Events:
   Type    Reason             Age                    From                       Message
   ----    ------             ----                   ----                       -------
-  Normal  SuccessfulRescale  2m50s (x3 over 6d23h)  horizontal-pod-autoscaler  New size: 3; reason: pods metric prometheus.googleapis.com|vllm:num
+  Normal  SuccessfulRescale  2m50s (x3 over 6d23h)  horizontal-pod-autoscaler  New size: 3; reason: pods metric prometheus.googleapis.com|dcgm_fil_dev_gpu_util
 ```
 
 The following shows the deployment has scaled from 1 to 3 replicas.
