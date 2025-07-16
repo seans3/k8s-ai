@@ -1,0 +1,34 @@
+# Autoscaler for AI inference server, using the
+# NVidia "dcgm_fi_dev_gpu_util" metric in managed
+# prometheus to scale the inference deployment.
+# This HPA uses a stackdriver adapter to view
+# metrics in the managed prometheus repository.
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: gemma-server-gpu-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: vllm-gemma-deployment
+  minReplicas: 1
+  maxReplicas: 5
+  metrics:
+  - type: Pods
+    pods:
+      metric:
+        # NVidia metric to determine scaling within managed prometheus.
+        name: prometheus.googleapis.com|dcgm_fi_dev_gpu_util|gauge
+      target:
+        type: AverageValue
+        # If average scale threshold for metric
+        averageValue:  20
+  behavior:
+    # Modify this to change how quickly the server will scale down.
+    scaleDown:
+      stabilizationWindowSeconds: 30 # <-- Waits 30 seconds before scaling down
+      policies:
+      - type: Percent
+        value: 100
+        periodSeconds: 15
