@@ -36,6 +36,8 @@ vllm:num_requests_swapped{model_name="google/gemma-3-1b-it"} 0.0
 vllm:num_requests_waiting{model_name="google/gemma-3-1b-it"} 0.0
 ```
 
+Delete the port-forward connection using Ctrl-C.
+
 ## II. Collect Metrics into Managed Prometheus
 
 Ensure the necessary metrics are being collected. We use a `PodMonitoring`
@@ -278,3 +280,37 @@ vllm-gemma-deployment   3/3     3            1           8d
 
 
 ## VI. Cleanup
+
+If deleting cluster, this will remove all Kubernetes resources:
+
+* Delete the GKE Autopilot cluster to avoid ongoing charges (uses $REGION which is set to `us-central1`):
+    ```bash
+    $ gcloud container clusters delete $CLUSTER_NAME --region=$REGION --project $PROJECT_ID
+	```
+
+* Then delete gcloud resources
+    ```
+$ gcloud projects remove-iam-policy-binding seans-devel \
+    --member="serviceAccount:metrics-adapter-gsa@seans-devel.iam.gserviceaccount.com" \
+    --role="roles/monitoring.viewer"
+
+$ gcloud iam service-accounts remove-iam-policy-binding \
+    metrics-adapter-gsa@seans-devel.iam.gserviceaccount.com \
+    --role="roles/iam.workloadIdentityUser" \
+    --member="serviceAccount:seans-devel.svc.id.goog[custom-metrics/custom-metrics-stackdriver-adapter]"
+
+$ gcloud iam service-accounts delete metrics-adapter-gsa \
+    --project=seans-devel \
+```
+
+Otherwise, delete just the Kubernetes HPA resources
+
+* Delete the Kubernetes resources:
+    ```bash
+	$ kubectl describe hpa/gemma-server-hpa
+	$ kubectl delete -f ./stack-driver-adapter.yaml
+	$ kubectl describe podmonitoring/gemma-pod-monitoring
+	$ kubectl delete service llm-service
+	$ kubectl delete deployment vllm-gemma-deployment
+	$ kubectl delete secret hf-secret
+    ```
