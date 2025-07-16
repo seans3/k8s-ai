@@ -1,0 +1,13 @@
+apiVersion: monitoring.googleapis.com/v1
+kind: Rules
+metadata:
+  name: nvidia-dcgm-hpa-rules
+  namespace: default
+spec:
+  groups:
+  - name: dcgm.rules
+    interval: 15s # This should match your scrape interval
+    rules:
+    # This rule creates a new, lowercase metric from the original one.
+    - record: dcgm_fi_dev_gpu_util
+      expr: DCGM_FI_DEV_GPU_UTIL
