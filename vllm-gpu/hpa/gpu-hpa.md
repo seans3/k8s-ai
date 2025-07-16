@@ -1,4 +1,4 @@
-# Horizontal Pod Autoscaling AI Inference Server using NVidia GPU metrics
+# HPA AI Inference Server using NVidia GPU Metrics
 
 This exercise shows how to set up the infrastructure to automatically
 scale an AI inference server, using custom metrics (GPU metrics). This
