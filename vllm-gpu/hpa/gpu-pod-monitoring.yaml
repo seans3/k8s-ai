@@ -9,19 +9,15 @@
 apiVersion: monitoring.googleapis.com/v1
 kind: ClusterPodMonitoring
 metadata:
-  name: nvidia-dcgm-exporter-for-hpa
+  name: nvidia-dcgm-exporter-hpa-source
 spec:
   selector:
     matchLabels:
-      # This selector targets the DCGM exporter pods.
       app.kubernetes.io/name: gke-managed-dcgm-exporter
   endpoints:
   - port: metrics
     interval: 15s
-    # Must relabel metric to lower-case for HPA (known bug).
     metricRelabeling:
     - sourceLabels: [__name__]
       regex: 'DCGM_FI_DEV_GPU_UTIL'
-      action: replace
-      replacement: 'dcgm_fi_dev_gpu_util'
-      targetLabel: '__name__'
+      action: keep
