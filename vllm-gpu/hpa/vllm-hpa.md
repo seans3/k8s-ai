@@ -1,4 +1,4 @@
-# Horizontal Pod Autoscaling AI Inference Server
+# Horizontal Pod Autoscaling AI Inference Server using vLLM metrics
 
 This exercise shows how to set up the infrastructure to automatically
 scale an AI inference server, using custom metrics (vllm server
