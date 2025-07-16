@@ -307,9 +307,10 @@ Otherwise, delete just the Kubernetes HPA resources
 
 * Delete the Kubernetes resources:
     ```bash
-	$ kubectl describe hpa/gemma-server-hpa
+	$ kubectl delete hpa/gemma-server-hpa
 	$ kubectl delete -f ./stack-driver-adapter.yaml
-	$ kubectl describe podmonitoring/gemma-pod-monitoring
+	$ kubectl delete namespace custom-metrics
+	$ kubectl delete podmonitoring/gemma-pod-monitoring
 	$ kubectl delete service llm-service
 	$ kubectl delete deployment vllm-gemma-deployment
 	$ kubectl delete secret hf-secret
