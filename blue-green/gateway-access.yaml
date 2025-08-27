@@ -1,3 +1,6 @@
+# This GCPGatewayPolicy allows the Gateway to be accessed from any IP address.
+# It is used here for demonstration purposes. In a production environment,
+# you would likely restrict access to specific IP ranges.
 apiVersion: networking.gke.io/v1
 kind: GCPGatewayPolicy
 metadata:
@@ -5,6 +8,7 @@ metadata:
   namespace: default
 spec:
   default:
+    # allowGlobalAccess makes the Gateway accessible from the public internet.
     allowGlobalAccess: true
   targetRef:
     group: gateway.networking.k8s.io

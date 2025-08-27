@@ -1,8 +1,11 @@
+# This Deployment manifest defines the "blue" environment for the VLLM inference server.
+# It specifies the container image, resource requirements, and health checks for the pods.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: blue-vllm-gemma-deployment
 spec:
+  # replicas specifies the number of pod instances to run.
   replicas: 1
   selector:
     matchLabels:
@@ -11,7 +14,6 @@ spec:
     metadata:
       labels:
         app: blue-gemma-server
-        # 1 billion parameter model (smallest)
         ai.gke.io/model: gemma-3-1b-it
         ai.gke.io/inference-server: vllm
         examples.ai.gke.io/source: user-guide
@@ -19,6 +21,8 @@ spec:
       containers:
       - name: inference-server
         image: us-docker.pkg.dev/vertex-ai/vertex-vision-model-garden-dockers/pytorch-vllm-serve:20250312_0916_RC01
+        # resources defines the CPU, memory, and GPU required by the container.
+        # In GKE Autopilot, this request determines the type of node provisioned.
         resources:
           requests:
             cpu: "2"
@@ -37,7 +41,6 @@ spec:
         - --host=0.0.0.0
         - --port=8085
         env:
-        # 1 billion parameter model (smallest)
         - name: MODEL_ID
           value: google/gemma-3-1b-it
         - name: HUGGING_FACE_HUB_TOKEN
@@ -48,19 +51,21 @@ spec:
         volumeMounts:
         - mountPath: /dev/shm
           name: dshm
+        # livenessProbe checks if the container is running and responsive.
         livenessProbe:
           httpGet:
-            path: /v1/models # Use the confirmed health endpoint
+            path: /v1/models
             port: 8085
-          initialDelaySeconds: 300 # Give time for model to load (5 minutes)
+          initialDelaySeconds: 300
           periodSeconds: 30
           timeoutSeconds: 5
           failureThreshold: 3
+        # readinessProbe checks if the container is ready to accept traffic.
         readinessProbe:
           httpGet:
-            path: /v1/models # Use the confirmed health endpoint
+            path: /v1/models
             port: 8085
-          initialDelaySeconds: 300 # Give time for model to load (5 minutes)
+          initialDelaySeconds: 300
           periodSeconds: 10
           timeoutSeconds: 5
           failureThreshold: 3
@@ -68,7 +73,7 @@ spec:
       - name: dshm
         emptyDir:
             medium: Memory
+      # nodeSelector ensures the pod is scheduled on a node with an NVIDIA L4 GPU.
       nodeSelector:
-        # Nvidia L4 GPU
         cloud.google.com/gke-accelerator: nvidia-l4
         cloud.google.com/gke-gpu-driver-version: latest
