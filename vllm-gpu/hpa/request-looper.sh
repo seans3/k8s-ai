@@ -25,6 +25,30 @@ JSON_PAYLOAD=$(printf '{
   "messages": [{"role": "user", "content": "%s"}]
 }' "$MODEL" "$CONTENT")
 
+# --- Graceful Shutdown Logic ---
+# Array to store PIDs of background curl processes.
+pids=()
+
+# Cleanup function to be called on exit. This function iterates through the
+# stored PIDs and terminates each corresponding process.
+cleanup() {
+    echo -e "\n\nCaught signal. Shutting down gracefully..."
+    echo "Terminating ${#pids[@]} background curl processes."
+    # Kill all background processes.
+    for pid in "${pids[@]}"; do
+        # Use kill -0 to check if the process exists before trying to terminate it.
+        if kill -0 "$pid" 2>/dev/null;
+        then
+            kill -s TERM "$pid"
+        fi
+    done
+    echo "Cleanup complete. Exiting."
+    exit 0
+}
+
+# Set up the trap to call the cleanup function on SIGINT (Ctrl+C) or SIGTERM.
+trap cleanup SIGINT SIGTERM
+
 # --- Script Logic ---
 echo "Starting request loop..."
 echo "  PORT: $PORT"
@@ -46,6 +70,9 @@ do
        --silent \
        -o /dev/null \
        -w "HTTP Status: %{http_code}\n" &
+
+  # Store the PID of the last background process in the pids array.
+  pids+=($!)
 
   # Wait for 1 second before the next request.
   sleep 1
