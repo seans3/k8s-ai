@@ -1,0 +1,15 @@
+# Source: inferencepool/templates/inferencepool.yaml
+apiVersion: inference.networking.x-k8s.io/v1alpha2
+kind: InferencePool
+metadata:
+  name: inference-pool-vllm
+  namespace: default
+  labels:
+    app.kubernetes.io/name: inference-pool-vllm-epp
+    app.kubernetes.io/version: "v0.3.0"
+spec:
+  targetPortNumber: 8000
+  selector:
+    app: "gemma-server"
+  extensionRef:
+    name: inference-pool-vllm-epp
