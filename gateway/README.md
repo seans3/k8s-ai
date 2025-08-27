@@ -36,7 +36,7 @@ This project demonstrates the power of LoRA for multi-model serving. Here’s ho
 1.  **Base Model**: The `vllm-deployment.yaml` specifies a base model (`google/gemma-3-1b-it`) that is loaded into the VLLM inference server. This is the large, general-purpose model that resides in GPU memory.
 2.  **LoRA Adapters**: The `ConfigMap` named `vllm-gemma3-1b-adapters` defines the LoRA adapters that will be applied to the base model. In this case, it defines the `food-review` model, which is a fine-tuned adapter for a specific task.
 3.  **Dynamic Loading**: The `lora-adapter-syncer` init container reads this `ConfigMap` and ensures that the specified LoRA adapters are downloaded and made available to the VLLM server.
-4.  **Inference Requests**: When you make a request to the gateway and specify the `food-review` model, the VLLM server applies the corresponding LoRA adapter to the base Gemma model on the fly to generate the response. A request for the base model (`meta-llama/Llama-3.1-8B-Instruct`) will use the unmodified base model.
+4.  **Inference Requests**: When you make a request to the gateway and specify the `food-review` model, the VLLM server applies the corresponding LoRA adapter to the base Gemma model on the fly to generate the response. A request for the base model (`google/gemma-3-1b-it`) will use the unmodified base model.
 
 This architecture allows you to serve a base model and numerous specialized, fine-tuned models from a single GPU, dramatically improving resource utilization and reducing operational costs.
 
@@ -120,12 +120,14 @@ Once you have confirmed that the pods are running, the service is active, and th
 
 Test the Gemma model:
 
+Test the Gemma model:
+
 ```bash
 curl http://${GATEWAY_IP}/v1/chat/completions \
   -X POST \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "google/gemma-3-1-it",
+    "model": "google/gemma-3-1b-it",
     "messages": [
       {
         "role": "user",
@@ -134,6 +136,7 @@ curl http://${GATEWAY_IP}/v1/chat/completions \
     ]
   }'
 ```
+
 
 
 Test the Food Review model:
