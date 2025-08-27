@@ -1,122 +1,171 @@
-# Summary: GKE AI Inference Gateway - Blue/Green Model Upgrade
+# GKE AI Inference Gateway: Blue-Green Model Upgrades
 
-Before you begin, ensure you have completed all necessary setup steps.
-Please see the [Prerequisites Guide](./prerequisites.md) for detailed instructions.
+This guide provides instructions for deploying a VLLM inference server on GKE using a blue-green deployment strategy. This approach enables zero-downtime updates and provides a safe, instantaneous rollback capability.
 
-## I. Create and Configure Google Cloud Resources
+## Overview & Architecture
 
-1.  **Create a GKE Autopilot Cluster:**
-    * GKE Autopilot manages your cluster's nodes, automatically provisioning resources like GPUs when your workloads request them. You do not need to manually create and configure GPU node pools. The `$REGION` variable (set to `us-central1` in prerequisites) will be used here.
-    * Create a GKE Autopilot cluster:
-        ```bash
-        gcloud container clusters create-auto $CLUSTER_NAME \
-            --project=$PROJECT_ID \
-            --region=$REGION
-        ```
-        *(Note: Autopilot cluster creation might take a few minutes. You can add `--release-channel=rapid` or other configurations if needed, similar to Standard clusters.)*
-    * Connect `kubectl` to your GKE Autopilot cluster:
-        ```bash
-        gcloud container clusters get-credentials $CLUSTER_NAME --region=$REGION --project $PROJECT_ID
-        ```
-2.  **Create Kubernetes Secret for Hugging Face Token:**
-    * Store your Hugging Face token as a Kubernetes secret. This allows pods in your GKE cluster to securely authenticate with Hugging Face to download model files.
-        ```bash
-        kubectl create secret generic hf-secret \
-            --from-literal=hf_token=$HF_TOKEN
-        ```
+The blue-green deployment strategy is a high-availability release model that minimizes downtime and reduces risk. It involves maintaining two identical production environments, referred to as "blue" and "green."
 
-## II. Deploy vLLM
+-   **Blue Environment**: The live, production environment that receives all user traffic.
+-   **Green Environment**: An identical, idle environment where the new version of the application is deployed and tested.
 
-1.  **Define Kubernetes Deployment YAML:**
-    * Create a `vllm-deployment.yaml` file using the raw YAML content provided separately. This file defines a Kubernetes Deployment resource that manages your vLLM pods.
-    * Refer to the [vllm-deployment.yaml](./vllm-deployment.yaml) file (which you will create with the provided YAML content).
-    * **Key configurations in this file include:**
-        * `spec.replicas`: Number of vLLM instances.
-        * `spec.template.spec.containers`:
-            * `image`: The vLLM Docker image (eg. pytorch-vllm-serve)
-            * `env`: Environment variables, including `HF_TOKEN` (mounted from the secret).
-            * `args`: Command-line arguments for the vLLM server, such as `--model`, model name, `--port 8000`, and potentially `--tensor-parallel-size`.
-            * `resources.limits`: **Crucially, specify the GPU resources required (e.g., `nvidia.com/gpu: "1"`)**. This tells Autopilot to provision a node with the requested GPU type for this pod. You might also need to add a `nodeSelector` for the specific GPU type if not using default Autopilot GPU classes (e.g., `cloud.google.com/gke-accelerator: nvidia-l4`).
-            * `ports.containerPort`: The port vLLM listens on (typically 8000).
-            * Readiness and Liveness probes to ensure pod health.
-2.  **Apply the Deployment Manifest:**
-    * Deploy vLLM to your GKE cluster using `kubectl`:
-        ```bash
-        kubectl apply -f vllm-deployment.yaml
-        ```
-3.  **Monitor Deployment Status:**
-    * Check the status of your pods. Autopilot will take some time to provision a GPU node if one isn't already available that meets the workload's requirements.
-        ```bash
-        kubectl get pods -l app=gemma-server -w # Assuming your deployment has label app=gemma-server
-        kubectl wait --for=condition=Available --timeout=900s deployment/vllm-gemma-deployment # Adjust name, timeout might need to be longer for initial GPU node provisioning
-        ```
-4.  **View Logs (Recommended):**
-    * Check the logs from the vLLM pods to ensure the model is downloading and the server starts correctly:
-        ```bash
-        kubectl logs -f -l app=gemma-server # Adjust label selector
-        ```
-    * The logs will look something like
-	    ```bash
-        INFO:     Automatically detected platform cuda.
-        ...
-        INFO      [launcher.py:34] Route: /v1/chat/completions, Methods: POST
-        ...
-        INFO:     Started server process [13]
-        INFO:     Waiting for application startup.
-        INFO:     Application startup complete.
-        Default STARTUP TCP probe succeeded after 1 attempt for container "vllm--google--gemma-3-1b-it-1" on port 8000.
-        ```
+Once the green environment is verified, a router switches traffic from the blue to the green environment, making the new version live. The old blue environment is kept on standby for a quick rollback if needed.
 
-## III. Serve the Model (Expose and Interact)
+This project implements this architecture on GKE using the following components:
 
-1.  **Define Kubernetes Service YAML (as ClusterIP):**
-    * Create a `vllm-service.yaml` file using the raw YAML content provided separately. This defines a Kubernetes Service to expose your vLLM deployment internally within the cluster.
-    * Refer to the [vllm-service.yaml](./vllm-service.yaml) file (which you will create with the provided YAML content).
-    * **Key configurations in this file include:**
-        * `type: ClusterIP`: This makes the service reachable only from within the GKE cluster. For local testing/development, you will typically use `kubectl port-forward`.
-        * `spec.selector`: Must match the labels of your vLLM deployment's pods.
-        * `spec.ports`: Define the port the service listens on (e.g., `port: 8000`) and the `targetPort` (the container port of vLLM, usually 8000, or its named port).
-2.  **Apply the Service Manifest:**
-    ```bash
-    kubectl apply -f vllm-service.yaml
-    ```
-3.  **Accessing the Service (via Port Forwarding for Local Testing):**
-    * Since `ClusterIP` services are not directly accessible externally, use `kubectl port-forward` to forward traffic from your local machine to the service within the cluster.
-        ```bash
-        # Forward a local port (e.g., 8080) to the service port (e.g., 8000)
-        kubectl port-forward service/vllm-gemma-service 8080:8000 # Adjust service name, local port, and service port as needed
-        ```
-        Now, requests to `localhost:8080` on your machine will be forwarded to port `8000` on the `vllm-gemma-service` inside GKE.
-4.  **Interact with the Model:**
-    * **Using `curl` (via port-forward):** Send HTTP POST requests to `localhost` on the port you forwarded.
-        ```bash
-        curl -X POST http://localhost:8080/v1/chat/completions \
-        -H "Content-Type: application/json" \
-        -d '{
-            "model": "google/gemma-3-1b-it",
-            "messages": [{"role": "user", "content": "Explain Quantum Computing in simple terms."}]
-        }'
-        ```
-    * **(Optional) Gradio Interface:** If the tutorial includes a Gradio UI, it would typically be deployed as another service within the cluster that communicates with the `vllm-gemma-service` (ClusterIP). You would then port-forward to the Gradio service to access its UI.
+1.  **Gateway (`gateway.yaml`)**: A single entry point for all inference requests, managed by GKE's Gateway controller. It provisions an external load balancer.
 
-## IV. Observe and Troubleshoot
+2.  **Blue/Green Deployments (`blue-vllm-deployment.yaml`, `green-vllm-deployment.yaml`)**: Two identical VLLM inference server deployments. Each runs in its own set of pods, allowing them to be updated and managed independently.
 
-* Use `kubectl logs deployment/<deployment-name>` to view logs.
-* Use `kubectl describe pod <pod-name>` to get detailed information about a specific pod, including events. Note that with Autopilot, node-level details are abstracted.
-* Monitor GPU utilization and performance using Cloud Monitoring.
+3.  **Blue/Green Services (`blue-vllm-service.yaml`, `green-vllm-service.yaml`)**: Each deployment is exposed internally by a `ClusterIP` Service, providing a stable network endpoint for the gateway to target.
 
-## V. Clean Up
+4.  **HTTPRoute (`blue-route.yaml`, `green-route.yaml`)**: The core of the traffic-shifting mechanism. This resource defines rules that tell the Gateway how to distribute traffic between the blue and green services using weighted backends. By applying a different `HTTPRoute` manifest, we can instantly shift 100% of the traffic from one environment to the other.
 
-* Delete the Kubernetes resources:
-    ```bash
-    kubectl delete service vllm-gemma-service # Adjust name
-    kubectl delete deployment vllm-gemma-deployment # Adjust name
-    kubectl delete secret hf-secret
-    ```
-* Delete the GKE Autopilot cluster to avoid ongoing charges (uses $REGION which is set to `us-central1`):
-    ```bash
-    gcloud container clusters delete $CLUSTER_NAME --region=$REGION --project $PROJECT_ID
-    ```
-* Remove any other Google Cloud resources created.
+## Deployment Instructions
 
-**Note:** Always refer to the specific YAML files and detailed commands in the official Google Cloud documentation. For GKE Autopilot, pay close attention to how GPU types are requested in your workload manifest (e.g., using `resources.limits` and potentially `nodeSelector` for specific accelerator types available in Autopilot like `cloud.google.com/gke-accelerator: nvidia-tesla-t4` or `cloud.google.com/gke-accelerator: nvidia-l4`).
+### Prerequisites
+
+1.  A configured Google Cloud project and authenticated `gcloud`/`kubectl` CLI. For a detailed guide on setting up your environment from scratch, see [SETUP.md](SETUP.md).
+2.  A GKE Autopilot cluster.
+3.  A Kubernetes secret named `hf-secret` in the `default` namespace containing your Hugging Face token. See [SETUP.md](SETUP.md) for instructions.
+4.  Sufficient NVIDIA L4 GPU quota in your GCP project for the selected region.
+
+### Step 1: Deploy the Gateway
+
+This manifest creates the Gateway, which provisions the external load balancer.
+
+```bash
+kubectl apply -f gateway.yaml
+kubectl apply -f gateway-access.yaml
+```
+
+### Step 2: Deploy the "Blue" Environment
+
+Deploy the initial version of the VLLM inference server. This will be our live "blue" environment.
+
+```bash
+kubectl apply -f blue-vllm-deployment.yaml
+kubectl apply -f blue-vllm-service.yaml
+kubectl apply -f blue-health-policy.yaml
+```
+
+### Step 3: Route Traffic to the "Blue" Environment
+
+Apply the `HTTPRoute` manifest to direct 100% of incoming traffic to the `blue-llm-service`.
+
+```bash
+kubectl apply -f blue-route.yaml
+```
+
+### Step 4: Verify and Test the "Blue" Environment
+
+**1. Check the Pod Status**
+
+Check the status of the "blue" deployment. GKE Autopilot will automatically provision a node with an NVIDIA L4 GPU, which may take several minutes.
+
+```bash
+# Wait for the blue deployment to become available
+kubectl wait --for=condition=Available --timeout=900s deployment/blue-vllm-gemma-deployment
+```
+
+**2. Get the Gateway IP Address**
+
+It may take a few minutes for the load balancer to be provisioned. Check the status and get the IP address with the following command:
+
+```bash
+GATEWAY_IP=$(kubectl get gateway blue-green-gateway -o jsonpath='{.status.addresses[0].value}')
+while [ -z "$GATEWAY_IP" ]; do
+  echo "Waiting for Gateway IP..."
+  sleep 10
+  GATEWAY_IP=$(kubectl get gateway blue-green-gateway -o jsonpath='{.status.addresses[0].value}')
+done
+echo "Gateway IP: $GATEWAY_IP"
+```
+
+**3. Test the Endpoint**
+
+Send an inference request. The response will include a header `X-Response-Service: blue-service`, confirming the request was handled by the blue environment.
+
+```bash
+curl -v http://${GATEWAY_IP}/v1/chat/completions \
+  -X POST \
+  -H "Content-Type: application/json" \
+  -d 
+    "model": "google/gemma-3-1b-it",
+    "messages": [
+      {
+        "role": "user",
+        "content": "What is a blue-green deployment?"
+      }
+    ]
+  }
+```
+
+### Step 5: Deploy the "Green" Environment (The Upgrade)
+
+Now, deploy the new version of the application to the "green" environment. At this point, it receives no production traffic.
+
+```bash
+kubectl apply -f green-vllm-deployment.yaml
+kubectl apply -f green-vllm-service.yaml
+kubectl apply -f green-health-policy.yaml
+```
+
+Wait for the "green" deployment to become available:
+```bash
+kubectl wait --for=condition=Available --timeout=900s deployment/green-vllm-gemma-deployment
+```
+
+### Step 6: Switch Traffic to the "Green" Environment
+
+Atomically switch 100% of live traffic to the "green" environment by applying the `green-route.yaml` manifest. This updates the Gateway's routing rules.
+
+```bash
+kubectl apply -f green-route.yaml
+```
+
+### Step 7: Verify the "Green" Environment
+
+Send another test request. The response header should now be `X-Response-Service: green-service`, confirming that the new version is live.
+
+```bash
+curl -v http://${GATEWAY_IP}/v1/chat/completions \
+  -X POST \
+  -H "Content-Type: application/json" \
+  -d 
+    "model": "google/gemma-3-1b-it",
+    "messages": [
+      {
+        "role": "user",
+        "content": "What is a blue-green deployment?"
+      }
+    ]
+  }
+```
+
+### Step 8: Rollback (Optional)
+
+If you detect issues with the "green" deployment, you can instantly roll back by reapplying the original route.
+
+```bash
+kubectl apply -f blue-route.yaml
+```
+
+### Cleanup
+
+To remove all the resources created in this guide, delete the Kubernetes objects.
+
+```bash
+kubectl delete -f gateway.yaml
+kubectl delete -f gateway-access.yaml
+kubectl delete -f blue-route.yaml
+kubectl delete -f green-route.yaml
+kubectl delete -f blue-vllm-service.yaml
+kubectl delete -f green-vllm-service.yaml
+kubectl delete -f blue-vllm-deployment.yaml
+kubectl delete -f green-vllm-deployment.yaml
+kubectl delete -f blue-health-policy.yaml
+kubectl delete -f green-health-policy.yaml
+```
+
+To delete the GKE cluster and other GCP resources, follow the cleanup steps in [SETUP.md](SETUP.md)
