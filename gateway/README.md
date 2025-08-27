@@ -159,7 +159,11 @@ To remove all the resources created in this guide, delete the Kubernetes objects
 #### Delete the Kubernetes Resources:
 
 ```bash
-kubectl delete -f gateway.yaml,httproute.yaml,inference-model.yaml,vllm-service.yaml,vllm-deployment.yaml
+kubectl delete -f gateway.yaml
+kubectl delete -f httproute.yaml
+kubectl delete -f inference-model.yaml
+kubectl delete -f vllm-service.yaml
+kubectl delete -f vllm-deployment.yaml
 ```
 
 #### Delete the GPU Node Pool:
