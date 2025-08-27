@@ -28,11 +28,26 @@ JSON_PAYLOAD=$(printf '{
 # --- Graceful Shutdown Logic ---
 # Array to store PIDs of background curl processes.
 pids=()
+request_count=0
+start_time=$(date +%s)
+
 
 # Cleanup function to be called on exit. This function iterates through the
 # stored PIDs and terminates each corresponding process.
 cleanup() {
     echo -e "\n\nCaught signal. Shutting down gracefully..."
+
+    # --- Summary ---
+    end_time=$(date +%s)
+    duration=$((end_time - start_time))
+    echo "----------------------------------------"
+    echo "Test Summary"
+    echo "----------------------------------------"
+    echo "Total Requests Sent: ${request_count}"
+    echo "Total Duration: ${duration}s"
+    echo "----------------------------------------"
+
+
     echo "Terminating ${#pids[@]} background curl processes."
     # Kill all background processes.
     for pid in "${pids[@]}"; do
@@ -59,17 +74,36 @@ echo "Press Ctrl+C to stop."
 # Infinite loop to send requests.
 while true
 do
-  echo "----------------------------------------"
-  echo "Sending request at $(date)"
+  ((request_count++))
+  echo -ne "Sending request #${request_count}..."
 
-  # Send the POST request using curl and run it in the background (&).
-  # The output and errors are redirected to /dev/null to keep the console clean.
-  curl -X POST "$URL" \
-       -H "Content-Type: application/json" \
-       -d "$JSON_PAYLOAD" \
-       --silent \
-       -o /dev/null \
-       -w "HTTP Status: %{http_code}\n" &
+  # This block runs in a background subshell (&) for each request.
+  (
+    # Execute curl, capturing the response body and appending the HTTP status code
+    # on a new line. The -s flag silences the progress meter.
+    output=$(curl -s -w "\n%{http_code}" -X POST "$URL" \
+      -H "Content-Type: application/json" \
+      -d "$JSON_PAYLOAD")
+
+    # Extract the HTTP status code (which is the last line of the output).
+    http_code="${output##*
+
+'}"
+
+    # Check if the status code is not a success code (i.e., not 2xx).
+    if [[ "$http_code" -lt 200 || "$http_code" -gt 299 ]]; then
+      # If it's an error, extract the response body (everything except the last line).
+      response_body="${output%
+
+'*}"
+      # Print a formatted error message to stderr.
+      echo -e "\n---" >&2
+      echo "ERROR: Request #${request_count} failed at $(date) with Status: ${http_code}" >&2
+      echo "Response Body:" >&2
+      echo "${response_body}" >&2
+      echo -e "---\n" >&2
+    fi
+  ) &
 
   # Store the PID of the last background process in the pids array.
   pids+=($!)
