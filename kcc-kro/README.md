@@ -24,7 +24,7 @@ For detailed, step-by-step instructions on how to set up your entire environment
 
 Once you have completed the setup guide, you can deploy the inference services.
 
-### 1. Gemma on NVIDIA L4 GPU with vLLM
+### 1. Gemma 1B on NVIDIA L4 GPU with vLLM
 
 This setup serves the [google/gemma-3-1b-it](https://huggingface.co/google/gemma-3-1b-it) model on an NVIDIA L4 GPU using the vLLM inference server.
 
@@ -43,7 +43,6 @@ spec:
   replicas: 1
 EOF
 ```
-> **Note:** The `.spec.replicas` field is currently required.
 
 **Verify the resources are created:**
 ```bash
@@ -80,7 +79,7 @@ kubectl get service -n ${NAMESPACE}
     }
     ```
 
-### 2. Gemma on Cloud TPU with JetStream
+### 2. Gemma 7B on Cloud TPU with JetStream
 
 This setup serves the [Gemma 7B model](https://www.kaggle.com/models/google/gemma) on Cloud TPUs using the JetStream inference server.
 
