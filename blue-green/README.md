@@ -39,6 +39,13 @@ kubectl apply -f gateway.yaml
 kubectl apply -f gateway-access.yaml
 ```
 
+**Verify the Gateway:**
+Check that the Gateway has been accepted and assigned an address. This may take a few minutes.
+```bash
+kubectl get gateway blue-green-gateway -w
+```
+Wait for the `ADDRESS` field to be populated before proceeding.
+
 ### Step 2: Deploy the "Blue" Environment
 
 Deploy the initial version of the VLLM inference server. This will be our live "blue" environment.
@@ -49,6 +56,13 @@ kubectl apply -f blue-vllm-service.yaml
 kubectl apply -f blue-health-policy.yaml
 ```
 
+**Verify the "Blue" Deployment:**
+Check the status of the pods and service.
+```bash
+kubectl get pods -l app=blue-gemma-server
+kubectl get service blue-llm-service
+```
+
 ### Step 3: Route Traffic to the "Blue" Environment
 
 Apply the `HTTPRoute` manifest to direct 100% of incoming traffic to the `blue-llm-service`.
@@ -56,6 +70,13 @@ Apply the `HTTPRoute` manifest to direct 100% of incoming traffic to the `blue-l
 ```bash
 kubectl apply -f blue-route.yaml
 ```
+
+**Verify the Route:**
+Inspect the `HTTPRoute` to confirm that the "blue" service has a weight of 100.
+```bash
+kubectl get httproute blue-green-route -o yaml
+```
+Look for the `backendRefs` section in the output.
 
 ### Step 4: Verify and Test the "Blue" Environment
 
@@ -111,6 +132,13 @@ kubectl apply -f green-vllm-service.yaml
 kubectl apply -f green-health-policy.yaml
 ```
 
+**Verify the "Green" Deployment:**
+Check the status of the new pods and service.
+```bash
+kubectl get pods -l app=green-gemma-server
+kubectl get service green-llm-service
+```
+
 Wait for the "green" deployment to become available:
 ```bash
 kubectl wait --for=condition=Available --timeout=900s deployment/green-vllm-gemma-deployment
@@ -122,6 +150,12 @@ Atomically switch 100% of live traffic to the "green" environment by applying th
 
 ```bash
 kubectl apply -f green-route.yaml
+```
+
+**Verify the Traffic Switch:**
+Inspect the `HTTPRoute` again to confirm that the "green" service now has a weight of 100.
+```bash
+kubectl get httproute blue-green-route -o yaml
 ```
 
 ### Step 7: Verify the "Green" Environment
@@ -151,6 +185,12 @@ If you detect issues with the "green" deployment, you can instantly roll back by
 kubectl apply -f blue-route.yaml
 ```
 
+**Verify the Rollback:**
+Inspect the `HTTPRoute` one last time to ensure the traffic has been routed back to the "blue" service.
+```bash
+kubectl get httproute blue-green-route -o yaml
+```
+
 ### Cleanup
 
 To remove all the resources created in this guide, delete the Kubernetes objects.
@@ -169,3 +209,4 @@ kubectl delete -f green-health-policy.yaml
 ```
 
 To delete the GKE cluster and other GCP resources, follow the cleanup steps in [SETUP.md](SETUP.md)
+
