@@ -11,9 +11,7 @@ spec:
     metadata:
       labels:
         app: gemma-server
-        # 1 billion parameter model (smallest)
         ai.gke.io/model: gemma-3-1b-it
-        # ai.gke.io/model: llama3-8b-instruct
         ai.gke.io/inference-server: vllm
         examples.ai.gke.io/source: user-guide
     spec:
@@ -52,10 +50,8 @@ spec:
         - --port=8000
         - --enable-lora
         env:
-        # 1 billion parameter model (smallest)
         - name: MODEL_ID
           value: google/gemma-3-1b-it
-          # value: meta-llama/Llama-3.1-8B-Instruct
         - name: HUGGING_FACE_HUB_TOKEN
           valueFrom:
             secretKeyRef:

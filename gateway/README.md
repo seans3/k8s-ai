@@ -114,7 +114,7 @@ You should see an output with a valid IP address listed under the `CLUSTER-IP` c
 It may take a few minutes for the load balancer to be provisioned. Check the status and get the IP address with the following command:
 
 ```bash
-GATEWAY_IP=$(kubectl get gateway my-inference-gateway -o jsonpath='{.status.addresses[0].value}')
+GATEWAY_IP=$(kubectl get gateway ai-inf-gateway -o jsonpath='{.status.addresses[0].value}')
 echo "Gateway IP: $GATEWAY_IP"
 ```
 
@@ -124,23 +124,23 @@ If the command returns an empty string, wait a few minutes and try again. The IP
 
 Once you have confirmed that the pods are running, the service is active, and the gateway has an IP address, you can send inference requests to each model through the gateway from a VM or pod within the same VPC network.
 
-Test the Llama model:
+Test the Gemma model:
 
 ```bash
 curl http://${GATEWAY_IP}/v1/chat/completions \
   -X POST \
   -H "Content-Type: application/json" \
-  -d 
-    "{
-    "model": "meta-llama/Llama-3.1-8B-Instruct",
+  -d '{
+    "model": "google/gemma-3-1-it",
     "messages": [
       {
         "role": "user",
         "content": "What is the meaning of life?"
       }
     ]
-  }"
+  }'
 ```
+
 
 Test the Food Review model:
 
@@ -148,17 +148,9 @@ Test the Food Review model:
 curl http://${GATEWAY_IP}/v1/chat/completions \
   -X POST \
   -H "Content-Type: application/json" \
-  -d 
-    "{
-    "model": "food-review",
-    "messages": [
-      {
-        "role": "user",
-        "content": "What is the meaning of life?"
-      }
-    ]
-  }"
+  -d '{ "model": "food-review", "messages": [ { "role": "user", "content": "What is the meaning of life?" } ] }'
 ```
+
 
 A successful response will be a JSON object containing the model's output. If the request times out or returns an error, double-check the pod logs and ensure that the gateway IP is correct.
 
