@@ -1,28 +1,50 @@
-# Config for resources for custom metrics stackdriver
-# adapter. This adapter is necessary for the HPA to
-# retrieve custom metrics in managed prometheus in GKE.
+# ---
+# Purpose: This manifest deploys the Custom Metrics Stackdriver Adapter.
 #
-# In addition to a deployment/service for the adapter,
-# there are service accounts, roles, and bindings
-# for the adapter. But this adapter will *not* have
-# sufficient privileges to view the metrics in the
-# managed prometheus repository unless a GCP
-# service account is connected to the k8s service
-# account through workload identity. Additionally,
-# the GCP service account *must* have the
-# "monitoring/viewer" IAM permission. Lookup how
-# to set up workload identity.
+# What it does:
+# The Horizontal Pod Autoscaler (HPA) cannot directly query metrics from Google
+# Cloud Monitoring (which is where Managed Prometheus stores its data). This
+# adapter acts as a bridge. It registers itself with the Kubernetes API server
+# as a provider for the custom metrics API (`custom.metrics.k8s.io`) and
+# external metrics API (`external.metrics.k8s.io`).
+#
+# When the HPA needs to check a metric value, it queries the Kubernetes API,
+# which in turn forwards the request to this adapter. The adapter then translates
+# the request into a query against the Google Cloud Monitoring API, fetches the
+# result, and returns it to the HPA.
+#
+# This file contains all the necessary components for the adapter to run:
+#   - A dedicated Namespace ('custom-metrics') to isolate the adapter.
+#   - A ServiceAccount for the adapter pod.
+#   - Numerous RBAC Roles and Bindings to grant the adapter the permissions
+#     it needs to interact with the Kubernetes API.
+#   - The Deployment that runs the adapter pod itself.
+#   - The Service that exposes the adapter within the cluster.
+#   - The APIService resources that register the adapter as a metrics provider.
+#
+# IMPORTANT: Applying this manifest is only the first step. You must also
+# configure Workload Identity to grant the adapter's ServiceAccount permission
+# to access the Google Cloud Monitoring API.
+# ---
+
+# A dedicated namespace to keep the adapter's components isolated.
 apiVersion: v1
 kind: Namespace
 metadata:
   name: custom-metrics
 ---
+# The ServiceAccount that the adapter pod will use. This SA is later linked
+# to a Google Service Account via Workload Identity.
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: custom-metrics-stackdriver-adapter
   namespace: custom-metrics
 ---
+# --- RBAC Configuration ---
+# The following ClusterRoles, Roles, and Bindings grant the adapter the
+# necessary permissions to operate within the Kubernetes cluster. This includes
+# permissions to get node/pod stats and to be an aggregated API server.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
@@ -80,6 +102,8 @@ subjects:
   name: custom-metrics-stackdriver-adapter
   namespace: custom-metrics
 ---
+# --- Adapter Deployment ---
+# This is the main workload that runs the adapter container.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -103,6 +127,7 @@ spec:
     spec:
       serviceAccountName: custom-metrics-stackdriver-adapter
       containers:
+      # The official GKE image for the Stackdriver adapter.
       - image: gcr.io/gke-release/custom-metrics-stackdriver-adapter:v0.16.1-gke.0
         imagePullPolicy: Always
         name: pod-custom-metrics-stackdriver-adapter
@@ -118,6 +143,9 @@ spec:
             cpu: 250m
             memory: 200Mi
 ---
+# --- Adapter Service ---
+# This service exposes the adapter's pod on a stable ClusterIP so that the
+# Kubernetes API server can reliably forward metric requests to it.
 apiVersion: v1
 kind: Service
 metadata:
@@ -138,6 +166,12 @@ spec:
     k8s-app: custom-metrics-stackdriver-adapter
   type: ClusterIP
 ---
+# --- API Registration ---
+# These APIService resources are the most critical part of the setup. They
+# register the adapter's Service as the handler for specific API groups.
+# When the HPA (or `kubectl top pods`) makes a request to the
+# `custom.metrics.k8s.io` or `external.metrics.k8s.io` APIs, the Kubernetes
+# API server knows to forward that request to the `custom-metrics-stackdriver-adapter` service.
 apiVersion: apiregistration.k8s.io/v1
 kind: APIService
 metadata:
@@ -180,6 +214,10 @@ spec:
     namespace: custom-metrics
   version: v1beta1
 ---
+# --- HPA Permissions ---
+# This final binding grants the HPA controller itself (which runs in the
+# `kube-system` namespace) permission to read from the `external.metrics.k8s.io`
+# API group that the adapter provides.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:

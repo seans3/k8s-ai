@@ -1,23 +1,30 @@
-# Scrapes *and* translates the nvidia gpu metric
-# into the managed prometheus repository. Must be
-# cluster pod monitoring because the targeted
-# dcgm export pods live in the gke-managed-system
-# namespace, and we can not set up a pod monitoring
-# resource (or any resource) in that restricted
-# namespace. This resource is necessary to lower-case
-# gpu metric, since upper-case metrics do not work.
+# ---
+# Purpose: This ClusterPodMonitoring resource configures Prometheus to scrape
+#          NVIDIA GPU metrics from the DCGM exporter.
+#
+# Why ClusterPodMonitoring?
+# The DCGM exporter pods run in the protected `gke-managed-system` namespace,
+# which is inaccessible to a standard, namespaced `PodMonitoring` resource.
+# A `ClusterPodMonitoring` is a cluster-scoped resource that has the necessary
+# permissions to scrape targets across all namespaces, including protected ones.
+# ---
 apiVersion: monitoring.googleapis.com/v1
 kind: ClusterPodMonitoring
 metadata:
   name: nvidia-dcgm-exporter-hpa-source
 spec:
+  # The selector tells Prometheus which pods to scrape, cluster-wide.
   selector:
     matchLabels:
+      # This label is automatically applied to the DCGM exporter pods managed by GKE.
       app.kubernetes.io/name: gke-managed-dcgm-exporter
   endpoints:
-  - port: metrics
-    interval: 15s
+  - port: metrics # The port on the DCGM exporter where metrics are exposed.
+    interval: 15s  # The frequency for scraping.
+    # metricRelabeling is used to filter the scraped metrics *before* they are
+    # ingested into Prometheus. This is a performance optimization.
     metricRelabeling:
-    - sourceLabels: [__name__]
-      regex: 'DCGM_FI_DEV_GPU_UTIL'
-      action: keep
+    # This rule tells Prometheus to only keep the specific metric we need for autoscaling.
+    - sourceLabels: [__name__] # The source label to match against (the metric name).
+      regex: 'DCGM_FI_DEV_GPU_UTIL' # The regex to match.
+      action: keep # The action to take: keep only the metrics that match.
