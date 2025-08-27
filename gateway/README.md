@@ -48,15 +48,11 @@ This architecture allows you to serve a base model and numerous specialized, fin
 
 ### Prerequisites
 
-1.  A GKE Standard cluster (Autopilot is not yet supported for Inference Gateway).
-2.  The `gcloud` and `kubectl` command-line tools installed and configured.
-3.  Sufficient NVIDIA L4 GPU quota in your GCP project for the selected region.
-4.  The `InferenceGateway` feature must be enabled on your cluster. If it's not, run the following command:
-    ```bash
-    gcloud container clusters update YOUR_CLUSTER_NAME \
-      --enable-inference-gateway \
-      --region=YOUR_COMPUTE_REGION
-    ```
+1.  A configured Google Cloud project and authenticated `gcloud`/`kubectl` CLI. For a detailed guide on setting up your environment from scratch, see [SETUP.md](SETUP.md).
+2.  A GKE Standard cluster with the Inference Gateway feature enabled.
+3.  A Kubernetes secret named `hf-secret` in the `default` namespace containing your Hugging Face token with at least 'Read' permissions. See [SETUP.md](SETUP.md) for instructions.
+4.  Sufficient NVIDIA L4 GPU quota in your GCP project for the selected region.
+
 
 ### Step 1: Create the GPU Node Pool
 
