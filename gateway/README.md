@@ -49,7 +49,7 @@ This architecture allows you to serve a base model and numerous specialized, fin
 ### Prerequisites
 
 1.  A configured Google Cloud project and authenticated `gcloud`/`kubectl` CLI. For a detailed guide on setting up your environment from scratch, see [SETUP.md](SETUP.md).
-2.  A GKE Standard cluster with the Inference Gateway feature enabled.
+2.  A GKE cluster with the Inference Gateway feature enabled. The instructions below use a GKE Standard cluster, but GKE Autopilot is also supported with configuration adjustments.
 3.  A Kubernetes secret named `hf-secret` in the `default` namespace containing your Hugging Face token with at least 'Read' permissions. See [SETUP.md](SETUP.md) for instructions.
 4.  Sufficient NVIDIA L4 GPU quota in your GCP project for the selected region.
 

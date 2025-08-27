@@ -67,7 +67,7 @@ gcloud services enable \
 
 ## 4. Create a GKE Standard Cluster
 
-This project requires a GKE Standard cluster to support the Inference Gateway feature.
+This guide creates a GKE Standard cluster, as the project is currently configured for it. GKE Autopilot is also supported, but would require modifications to the deployment and node pool configurations.
 
 ```bash
 export CLUSTER_NAME="inference-cluster"
