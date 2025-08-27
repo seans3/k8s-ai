@@ -1,3 +1,6 @@
+# This Kubernetes Job downloads a Gemma model from Kaggle, converts it to the
+# JetStream-compatible MaxText format, and uploads the result to a GCS bucket.
+# It is a one-time task that prepares the model for serving.
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -6,7 +9,10 @@ metadata:
 spec:
   template:
     spec:
+      # The service account is crucial for Workload Identity, granting the pod
+      # permissions to access GCS.
       serviceAccountName: ${KSA_NAME}
+      # "Never" is a common setting for one-off jobs, preventing restarts on failure.
       restartPolicy: Never
       containers:
       - name: model-converter
@@ -29,10 +35,13 @@ spec:
         - name: TOKENIZER_GCS_PATH
           value: "${TOKENIZER_GCS_PATH}"
         resources:
+          # This requests the necessary TPU resources from GKE.
           requests:
             google.com/tpu: 8
           limits:
             google.com/tpu: 8
+      # This selector ensures the job is scheduled on a node with the correct
+      # TPU hardware and topology.
       nodeSelector:
         cloud.google.com/gke-tpu-topology: 2x4
         cloud.google.com/gke-tpu-accelerator: tpu-v5-lite-podslice

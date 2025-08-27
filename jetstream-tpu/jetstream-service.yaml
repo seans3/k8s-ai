@@ -1,9 +1,13 @@
+# This Kubernetes Service provides a stable network endpoint for accessing the
+# JetStream server pods within the cluster.
 apiVersion: v1
 kind: Service
 metadata:
   name: jetstream-gemma-svc
   namespace: ${K8S_NAMESPACE}
 spec:
+  # This selector identifies the set of pods that the service will route traffic to.
+  # It must match the labels of the pods in the JetStream deployment.
   selector:
     app: jetstream-gemma-server
   ports:
