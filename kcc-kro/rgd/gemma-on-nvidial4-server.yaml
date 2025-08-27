@@ -1,25 +1,42 @@
+# This ResourceGraphDefinition (RGD) defines a new custom resource called 'GemmaOnNvidiaL4Server'.
+# When a user creates a 'GemmaOnNvidiaL4Server' resource, KRO will orchestrate the creation of the underlying
+# Kubernetes resources defined below: a Deployment and a Service.
+# This provides a simple, high-level abstraction for deploying the Gemma 1B model
+# on an NVIDIA L4 GPU using the vLLM inference server.
+
 apiVersion: kro.run/v1alpha1
 kind: ResourceGraphDefinition
 metadata:
   name: gemmaonnvidial4.kro.run
 spec:
+  # The 'schema' section defines the API for the 'GemmaOnNvidiaL4Server' custom resource.
+  # It specifies the fields that users can configure.
   schema:
     apiVersion: v1alpha1
     kind: GemmaOnNvidiaL4Server
     spec:
+      # 'replicas' controls the number of inference server pods. Defaults to 1 if not specified.
       replicas: integer | default=1
+      # 'hfsecret' is the name of the Kubernetes secret that holds the Hugging Face API token.
+      # This token is required to download the model from the Hugging Face Hub.
       hfsecret: string | default=hf-token
+    # The 'status' section could be used to expose information from the underlying resources,
+    # such as the ClusterIP of the service.
     #status:
     #  ip: ${service.spec.clusterIP}
+
+  # The 'resources' section lists the Kubernetes resources that KRO will create and manage.
   resources:
-  - id: deployment
+  - id: deployment # A unique identifier for this resource within the RGD.
     template:
       apiVersion: apps/v1
       kind: Deployment
       metadata:
+        # The name and namespace are dynamically set from the metadata of the custom resource instance.
         name: ${schema.metadata.name}
         namespace: ${schema.metadata.namespace}
       spec:
+        # The number of replicas is taken from the user-provided spec.
         replicas: ${schema.spec.replicas}
         selector:
           matchLabels:
@@ -28,7 +45,7 @@ spec:
           metadata:
             labels:
               app: ${schema.metadata.name}
-              # 1 billion parameter model (smallest)
+              # These labels provide metadata about the AI model and server being used.
               ai.gke.io/model: gemma-3-1b-it
               ai.gke.io/inference-server: vllm
               examples.ai.gke.io/source: user-guide
@@ -37,6 +54,7 @@ spec:
             - name: inference-server
               image: us-docker.pkg.dev/vertex-ai/vertex-vision-model-garden-dockers/pytorch-vllm-serve:20250312_0916_RC01
               resources:
+                # Requests and limits for CPU, memory, and GPU.
                 requests:
                   cpu: "2"
                   memory: "10Gi"
@@ -47,6 +65,7 @@ spec:
                   memory: "10Gi"
                   ephemeral-storage: "10Gi"
                   nvidia.com/gpu: "1"
+              # The command and arguments configure the vLLM server to download and serve the Gemma model.
               command: ["python3", "-m", "vllm.entrypoints.openai.api_server"]
               args:
               - --model=google/gemma-3-1b-it
@@ -54,22 +73,28 @@ spec:
               - --host=0.0.0.0
               - --port=8081
               env:
+              # This environment variable provides the Hugging Face token to the container,
+              # allowing it to authenticate and download the model.
               - name: HUGGING_FACE_HUB_TOKEN
                 valueFrom:
                   secretKeyRef:
-                    name: ${schema.spec.hfsecret}
+                    name: ${schema.spec.hfsecret} # The secret name is taken from the user-provided spec.
                     key: hf_api_token
               volumeMounts:
+              # Mounting /dev/shm as a memory-backed volume can improve performance for certain operations.
               - mountPath: /dev/shm
                 name: dshm
             volumes:
             - name: dshm
               emptyDir:
                   medium: Memory
+            # This nodeSelector ensures that the pods are scheduled only on GKE nodes
+            # that have an NVIDIA L4 GPU attached and the latest drivers.
             nodeSelector:
               cloud.google.com/gke-accelerator: nvidia-l4
               cloud.google.com/gke-gpu-driver-version: latest
-  - id: service
+
+  - id: service # A unique identifier for the Service resource.
     template:
       apiVersion: v1
       kind: Service
@@ -81,7 +106,7 @@ spec:
           app: ${schema.metadata.name}
         type: ClusterIP
         ports:
+          # This exposes the vLLM server's port (8081) within the cluster.
           - protocol: TCP
             port: 8081
             targetPort: 8081
-      

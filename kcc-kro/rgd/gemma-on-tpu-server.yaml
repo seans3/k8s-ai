@@ -1,18 +1,39 @@
+# This ResourceGraphDefinition (RGD) defines a complex custom resource called 'GemmaOnTPUServer'.
+# It orchestrates a multi-step process to deploy the Gemma 7B model on a Google Cloud TPU
+# using the JetStream inference server.
+#
+# When a user creates a 'GemmaOnTPUServer' resource, KRO performs the following actions in sequence:
+# 1. Creates a dedicated Google Service Account (GSA) for the workload.
+# 2. Grants the GSA necessary IAM permissions for Google Cloud Storage.
+# 3. Configures Workload Identity to securely link the GSA with the Kubernetes Service Account.
+# 4. Creates a Google Cloud Storage (GCS) bucket to store the model checkpoint.
+# 5. Runs a Kubernetes Job on a TPU node. This job downloads the Gemma model from Kaggle,
+#    converts it to the format required by JetStream, and uploads it to the GCS bucket.
+# 6. Deploys the JetStream inference server, which mounts the converted model from the GCS bucket.
+# 7. Creates a Kubernetes Service to expose the JetStream server within the cluster.
+
 apiVersion: kro.run/v1alpha1
 kind: ResourceGraphDefinition
 metadata:
   name: gemmaontpuserver.kro.run
 spec:
+  # The 'schema' section defines the API for the 'GemmaOnTPUServer' custom resource.
   schema:
     apiVersion: v1alpha1
     kind: GemmaOnTPUServer
     spec:
       replicas: integer | default=1
+      # 'kaggleSecret' is the name of the Kubernetes secret containing the Kaggle API credentials (kaggle.json).
       kaggleSecret: string | default=kaggle-token
-      project: string # TODO KRO/BUG: support for external ref
+      # 'project' is the Google Cloud Project ID, which is required to correctly configure Workload Identity.
+      project: string
     #status:
     #  service: ${service.status.service}
+
+  # The 'resources' section lists the cloud and Kubernetes resources that KRO will create and manage.
+  # KRO processes these resources in order, respecting dependencies between them.
   resources:
+  # Create a Google Service Account (GSA) using Config Connector (KCC).
   - id: serviceaccount
     template:
       apiVersion: iam.cnrm.cloud.google.com/v1beta1
@@ -22,6 +43,8 @@ spec:
         namespace: ${schema.metadata.namespace}
       spec:
         displayName: ${schema.metadata.name}-jetstream
+
+  # Grant the GSA roles to read/write to Google Cloud Storage.
   - id: objectuserbinding
     template:
       apiVersion: iam.cnrm.cloud.google.com/v1beta1
@@ -30,10 +53,10 @@ spec:
         name: ${schema.metadata.name}-storage-object-user
         namespace: ${schema.metadata.namespace}
       spec:
-        member: serviceAccount:${serviceaccount.status.email}
+        member: serviceAccount:${serviceaccount.status.email} # Reference the email of the GSA created above.
         role: roles/storage.objectUser
         resourceRef:
-          apiVersion: resourcemanager.cnrm.cloud.google.com/v1beta1
+          apiVersion: resourcemanger.cnrm.cloud.google.com/v1beta1
           kind: Project
           name: acquire-namespace-project
   - id: objectinsightsbinding
@@ -50,10 +73,9 @@ spec:
           apiVersion: resourcemanager.cnrm.cloud.google.com/v1beta1
           kind: Project
           name: acquire-namespace-project
+
+  # Configure the GSA for Workload Identity, allowing Kubernetes Service Accounts to impersonate it.
   - id: workloadidentitybinding
-  #gcloud iam service-accounts add-iam-policy-binding wi-jetstream@${PROJECT_ID}.iam.gserviceaccount.com \
-  #  --role roles/iam.workloadIdentityUser \
-  #  --member "serviceAccount:${PROJECT_ID}.svc.id.goog[default/default]"
     template:
       apiVersion: iam.cnrm.cloud.google.com/v1beta1
       kind: IAMPartialPolicy
@@ -68,7 +90,10 @@ spec:
         bindings:
           - role: roles/iam.workloadIdentityUser
             members:
+              # This binds the GSA to the 'default' KSA in the target namespace.
               - member: serviceAccount:${schema.spec.project}.svc.id.goog[${schema.metadata.namespace}/default]
+
+  # Annotate the default Kubernetes Service Account (KSA) to link it to the GSA.
   - id: annotateDefaultServiceAccount
     template:
       apiVersion: v1
@@ -78,24 +103,28 @@ spec:
         namespace: ${schema.metadata.namespace}
         annotations:
           iam.gke.io/gcp-service-account: ${serviceaccount.status.email}
+
+  # Create the GCS bucket that will be used to store the converted model.
   - id: bucket
+    # 'readyWhen' ensures that subsequent steps only run after the bucket is successfully created.
     readyWhen:
       - ${bucket.status.conditions[0].status == "True"}
     template:
       apiVersion: storage.cnrm.cloud.google.com/v1beta1
       kind: StorageBucket
       metadata:
-        #name: gemma7b-${schema.metadata.uid} # TODO KRO/BUG: kro 0.3 would have it
-        #name: gemma7b-${schema.metadata.resourceVersion} # TODO KRO/BUG: resourceVersion keeps changing for Instance resulting in different bucket names resulting in several buckets being created in a loop
+        # The bucket name is derived from the project ID to ensure uniqueness.
         name: gemma7b-${schema.spec.project}
         annotations:
+          # This annotation ensures the bucket and its contents are deleted when the resource is destroyed.
           cnrm.cloud.google.com/force-destroy: "true"
       spec:
         storageClass: STANDARD
-  # TODO Create GSA , KSA and bindings
+
+  # This Job downloads the model from Kaggle and converts it for JetStream.
   - id: downloadCheckpoint
+    # 'readyWhen' ensures the deployment step waits for this job to complete successfully.
     readyWhen:
-      # - ${downloadCheckpoint.status.conditions[0].status == "True"}
       - ${downloadCheckpoint.status.completionTime != null}
     template:
       apiVersion: batch/v1
@@ -103,8 +132,6 @@ spec:
       metadata:
         name: ${schema.metadata.name}-loader
       spec:
-        # TODO KRO/BUG: will not work if we delete the job after it finishes. It will try to recreate the job.
-        #ttlSecondsAfterFinished: 30
         template:
           spec:
             restartPolicy: Never
@@ -112,17 +139,21 @@ spec:
             - name: inference-checkpoint
               image: us-docker.pkg.dev/cloud-tpu-images/inference/inference-checkpoint:v0.2.4
               args:
+              # Arguments point to the GCS bucket and the specific model to download.
               - -b=${bucket.metadata.name}
               - -m=google/gemma/maxtext/7b-it/2
               volumeMounts:
+              # Mount the Kaggle API credentials from the Kubernetes secret.
               - mountPath: "/kaggle/"
                 name: kaggle-credentials
                 readOnly: true
               resources:
+                # This job requires a TPU v5e pod slice with 8 cores.
                 requests:
                   google.com/tpu: "8"
                 limits:
                   google.com/tpu: "8"
+            # This nodeSelector ensures the job runs on the correct TPU topology.
             nodeSelector:
               cloud.google.com/gke-tpu-topology: 2x4
               cloud.google.com/gke-tpu-accelerator: tpu-v5-lite-podslice
@@ -130,7 +161,9 @@ spec:
             - name: kaggle-credentials
               secret:
                 defaultMode: 0400
-                secretName: ${schema.spec.kaggleSecret}
+                secretName: ${schema.spec.kaggleSecret} # The secret name is taken from the user-provided spec.
+
+  # This is the final Deployment for the JetStream inference server.
   - id: deployment
     template:
       apiVersion: apps/v1
@@ -148,13 +181,16 @@ spec:
             labels:
               app: ${schema.metadata.name}
           spec:
+            # The inference server must also run on the same TPU topology.
             nodeSelector:
               cloud.google.com/gke-tpu-topology: 2x4
               cloud.google.com/gke-tpu-accelerator: tpu-v5-lite-podslice
             containers:
+            # The 'maxengine-server' is the core inference engine that runs on the TPU.
             - name: maxengine-server
               image: us-docker.pkg.dev/cloud-tpu-images/inference/maxengine-server:v0.2.2
               args:
+              # These arguments configure the JetStream server.
               - model_name=gemma-7b
               - tokenizer_path=assets/tokenizer.gemma
               - per_device_batch_size=4
@@ -166,19 +202,23 @@ spec:
               - ici_tensor_parallelism=1
               - scan_layers=false
               - weight_dtype=bfloat16
+              # This crucial argument tells the server where to load the converted model weights from the GCS bucket.
               - load_parameters_path=gs://${bucket.metadata.name}/final/unscanned/gemma_7b-it/0/checkpoints/0/items
               - prometheus_port=9090
               ports:
-              - containerPort: 9000
+              - containerPort: 9000 # gRPC port
               resources:
                 requests:
                   google.com/tpu: "8"
                 limits:
                   google.com/tpu: "8"
+            # The 'jetstream-http' container provides an HTTP frontend to the gRPC server.
             - name: jetstream-http
               image: us-docker.pkg.dev/cloud-tpu-images/inference/jetstream-http:v0.2.2
               ports:
-              - containerPort: 8000
+              - containerPort: 8000 # HTTP port
+
+  # This Service exposes the JetStream server's HTTP and gRPC ports.
   - id: service
     template:
       apiVersion: v1
