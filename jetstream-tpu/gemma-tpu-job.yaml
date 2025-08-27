@@ -1,22 +1,33 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: data-loader-7b
+  name: gemma-tpu-job
+  namespace: ${K8S_NAMESPACE}
 spec:
-  ttlSecondsAfterFinished: 30
   template:
     spec:
+      serviceAccountName: ${KSA_NAME}
       restartPolicy: Never
       containers:
-      - name: inference-checkpoint
-        image: us-docker.pkg.dev/cloud-tpu-images/inference/inference-checkpoint:v0.2.4
-        args:
-        - -b=seans-ai-inf
-        - -m=google/gemma/maxtext/7b-it/2
-        volumeMounts:
-        - mountPath: "/kaggle/"
-          name: kaggle-credentials
-          readOnly: true
+      - name: model-converter
+        image: us-docker.pkg.dev/deeplearning-platform-release/gemma-maxtext-convert:latest
+        env:
+        - name: KAGGLE_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: kaggle-creds
+              key: username
+        - name: KAGGLE_KEY
+          valueFrom:
+            secretKeyRef:
+              name: kaggle-creds
+              key: key
+        - name: MODEL_VARIANT
+          value: "${MODEL_NAME}"
+        - name: GCS_OUTPUT_PATH
+          value: "${CONVERTED_MODEL_GCS_PATH}"
+        - name: TOKENIZER_GCS_PATH
+          value: "${TOKENIZER_GCS_PATH}"
         resources:
           requests:
             google.com/tpu: 8
@@ -25,8 +36,3 @@ spec:
       nodeSelector:
         cloud.google.com/gke-tpu-topology: 2x4
         cloud.google.com/gke-tpu-accelerator: tpu-v5-lite-podslice
-      volumes:
-      - name: kaggle-credentials
-        secret:
-          defaultMode: 0400
-          secretName: kaggle-secret
