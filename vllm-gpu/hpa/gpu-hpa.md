@@ -1,267 +1,117 @@
-# HPA AI Inference Server using NVidia GPU Metrics
+# Autoscaling a vLLM Server with NVIDIA GPU Metrics
 
-This exercise shows how to set up the infrastructure to automatically
-scale an AI inference server, using custom metrics (GPU metrics). This
-exercise requires Managed Prometheus service, which is automatically
-enabled for GKE clusters >= v1.27. We assume you already have the vLLM
-AI inference server running from this [exercise](../README.md), in the
-parent directory.
+This guide provides a detailed walkthrough for configuring a Horizontal Pod Autoscaler (HPA) to scale a vLLM inference server based on NVIDIA GPU utilization. This approach uses the `dcgm_fi_dev_gpu_util` metric, which is a direct measure of how busy the GPU hardware is.
 
-## I. Collect Metrics into Managed Prometheus
+This method is ideal for GPU-bound workloads, as it ensures that the number of replicas scales up to meet high demand and, just as importantly, scales down when expensive GPU resources are underutilized.
 
-Ensure the necessary metrics are being collected. We use a
-`ClusterPodMonitoring` custom resource, along with monitoring rules.
+**Prerequisites:**
+*   A running GKE cluster (v1.27+) with GPU nodes and Managed Service for Prometheus enabled.
+*   A deployed vLLM AI inference server as described in the [parent directory's README](../README.md).
 
-### Collect NVidia GPU metrics
+---
 
-The `ClusterPodMonitoring` custom resource will scrape NVidia GPU metrics
-into GKE Prometheus. This workload *must* be cluster-scoped, because
-the pods that it scrapes are in a protected namespace --
-`gke-managed-system`. These scraped pods are from an NVidia metrics
-exporter workload.
+## Step 1: Configure Prometheus Metric Collection for GPUs
 
-```
-# First, verify the nvidia metrics exporter is running.
-$ kubectl get all --namespace gke-managed-system
-NAME                      READY   STATUS    RESTARTS   AGE
-pod/dcgm-exporter-5vdk9   1/1     Running   0          8d
+GKE automatically deploys the NVIDIA Data Center GPU Manager (DCGM) exporter on nodes with GPUs. You need to configure Prometheus to scrape the metrics exposed by this exporter.
 
-NAME                           DESIRED   CURRENT   READY   UP-TO-DATE   AVAILABLE   NODE SELECTOR   AGE
-daemonset.apps/dcgm-exporter   1         1         1       1            1           <none>          8d
-```
-
-Next, deploy the `ClusterPodMonitoring` resource. The following
-`gpu-rules.yaml` correctly translates the GPU metric to
-lower-case to avoid a known metrics bug.
-
-```
-$ kubectl apply -f ./gpu-pod-monitoring.yaml
-$ kubectl apply -f ./gpu-rules.yaml
-```
-
-Validate the NVIDIA GPU metrics are being collected into GKE
-Prometheus by viewing the `Metrics explorer` in the gcloud
-console. Attempt to filter by `dcgm`, and you should be able
-to see the following metric: `dcgm_fi_dev_gpu_util`. This metric
-represents the percentage of time over the last sample period
-(typically one second) that one or more compute kernels were
-actively executing on the GPU. In simpler terms, it tells you
-how busy the GPU's processing cores were. A value of 100 means
-the GPU was constantly running compute tasks during the last
-interval, while a value of 0 means it was idle. It is one of
-the most common metrics for determining if a workload is
-"GPU-bound" or if GPUs are being underutilized.
-
-## III. Stackdriver Adapter for viewing metrics in GKE Prometheus
-
-### Deploy StackDriver Adapter
-
-The metric stackdriver adapter allows the Horizontal Pod Autoscaler to
-view/retrieve the previously collected metrics in Prometheus. This adapter
-does *not* have permissions (yet) to view metrics in Prometheus (see
-next step).
-
-```
-$ kubectl apply -f ./stack-driver-adapter.yaml
-```
-
-Verify the stack driver adapter workloads are deployed in the
-`custom-metrics` namespace.
-
-```
-$ kubectl get all --namespace custom-metrics
-NAME                                                      READY   STATUS    RESTARTS          AGE
-pod/custom-metrics-stackdriver-adapter-658f5968bd-nkmk2   1/1     Running   281 (6d23h ago)   7d23h
-
-NAME                                         TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)   AGE
-service/custom-metrics-stackdriver-adapter   ClusterIP   34.118.227.38   <none>        443/TCP   8d
-
-NAME                                                 READY   UP-TO-DATE   AVAILABLE   AGE
-deployment.apps/custom-metrics-stackdriver-adapter   1/1     1            1           8d
-
-NAME                                                            DESIRED   CURRENT   READY   AGE
-replicaset.apps/custom-metrics-stackdriver-adapter-658f5968bd   1         1         1       8d
-```
-
-### Use Workload Identity to give permission to view metrics
-
-Assuming the project is `seans-devel`, enable workload identity by creating
-a gcloud service account `metrics-adapte-gsa` to give workloads permissons
-to view metrics within gcloud:
-
-```
-$ gcloud iam service-accounts create metrics-adapter-gsa \
---project=seans-devel \
---display-name="Metrics Adapter GSA"
-
-$ gcloud projects add-iam-policy-binding seans-dev \
---member="serviceAccount:metrics-adapter-gsa@seans-devel.iam.gserviceaccount.com" \
---role="roles/monitoring.viewer"
-
-$ gcloud iam service-accounts add-iam-policy-binding \
-    metrics-adapter-gsa@seans-devel.iam.gserviceaccount.com \
-    --project=seans-devel \
-    --role="roles/iam.workloadIdentityUser" \
---member="serviceAccount:seans-devel.svc.id.goog[custom-metrics/custom-metrics-stackdriver-adapter]"
-
-$ kubectl annotate serviceaccount \
-    custom-metrics-stackdriver-adapter \
-    --namespace custom-metrics \
-    iam.gke.io/gcp-service-account=metrics-adapter-gsa@seans-devel.iam.gserviceaccount.com
-```
-
-### Verify StackDriver adapter is working
-
-```
-# First, discover the name of the stack driver adapter pod.
-$ kubectl get po --namespace custom-metrics
-NAME                                                  READY   STATUS    RESTARTS          AGE
-custom-metrics-stackdriver-adapter-658f5968bd-nkmk2   1/1     Running   281 (6d23h ago)   7d23h
-
-# Verify the stackdriver adapter now works, and has no permissions issues
-$ kubectl logs -f po/custom-metrics-stackdriver-adapter-658f5968bd-nkmk2 --namespace custom-metrics
-
-I0715 18:34:57.743218       1 filter_builder.go:258] Query with filter(s): "metric.labels.pod = \"vllm-gemma-deployment-69bc477d85-qmg2v\" AND metric.type = \"prometheus.googleapis.com/vllm:num_requests_running/gauge\" AND resource.labels.cluster = \"seans-gpu-hpa\" AND resource.labels.location = \"us-central1\" AND resource.labels.namespace = \"default\" AND resource.labels.project_id = \"seans-devel\" AND resource.type = \"prometheus_target\""
-```
-
-## IV. Deploy Horizontal Pod Autoscaler
-
-### Deploy the HPA
-
-Create the horizontal pod autoscaler (HPA), to scale the AI inference
-server. This HPA targets the AI inference `Deployment` named
-`vllm-gemma-deployment`, with a pod replica range of 1 to 5 pods.
-The target metric is `prometheus.googleapis.com|dcgm_fi_dev_gpu_util|gauge`.
-This metric ranges from 0 to 100. If the average of the metric exceeds
-the target threshold (currently 20), then the HPA will scale the inference
-server deployment.
-
-```
-$ kubectl apply -f ./gpu-horizontal-pod-autoscaler.yaml
-```
-
-### Verify the HPA
-
-Validate the metric the HPA is using to scale. Check the `ValidMetricFound` event.
-
-```
-$ kubectl describe hpa/gemma-server-hpa
-Name:                                                                   gemma-server-hpa
-Namespace:                                                              default
-Labels:                                                                 <none>
-Annotations:                                                            <none>
-CreationTimestamp:                                                      Tue, 08 Jul 2025 18:15:27 +0000
-Reference:                                                              Deployment/vllm-gemma-deployment
-Metrics:                                                                ( current / target )
-  "prometheus.googleapis.com|dcgm_fi_dev_gpu_util|gauge" on pods:       0 / 20
-Min replicas:                                                           1
-Max replicas:                                                           5
-Behavior:
-  Scale Up:
-    Stabilization Window: 0 seconds
-    Select Policy: Max
-    Policies:
-      - Type: Pods     Value: 4    Period: 15 seconds
-      - Type: Percent  Value: 100  Period: 15 seconds
-  Scale Down:
-    Stabilization Window: 30 seconds
-    Select Policy: Max
-    Policies:
-      - Type: Percent  Value: 100  Period: 15 seconds
-Deployment pods:       1 current / 1 desired
-Conditions:
-  Type            Status  Reason            Message
-  ----            ------  ------            -------
-  AbleToScale     True    ReadyForNewScale  recommended size matches current size
-  ScalingActive   True    ValidMetricFound  the HPA was able to successfully calculate a replica count from pods metric prometheus.googleapis.com|dcgm_fi_dev_gpu_util|gauge
-  ScalingLimited  True    TooFewReplicas    the desired replica count is less than the minimum replica count
-Events:           <none>
-```
-
-## V. Test
-
-Forward requests sent to local port `8081` to `llm-service` service
-listening on port `8081` within the cluster.
-
-```
-$ kubectl port-forward service/llm-service 8081:8081
-Forwarding from 127.0.0.1:8081 -> 8081
-Forwarding from [::1]:8081 -> 8081
-...
-```
-
-Within another terminal run AI requests in a loop to load
-the GPU, and see if the HPA is scaling the inference deployment.
-
-```
-$ ./request-looper.sh
-Starting request loop...
-  PORT: 8081
-  MODEL: google/gemma-3-1b-it
-  CONTENT: Explain Quantum Computing in simple terms.
-Press Ctrl+C to stop.
-----------------------------------------
-Sending request at Tue Jul 15 10:26:21 PM UTC 2025
-----------------------------------------
-Sending request at Tue Jul 15 10:26:22 PM UTC 2025
-----------------------------------------
-Sending request at Tue Jul 15 10:26:23 PM UTC 2025
-...
-```
-
-Check the HPA
-
-```
-$ kubectl describe hpa/gemma-serve-gpu-hpa
-...
-Events:
-  Type    Reason             Age                    From                       Message
-  ----    ------             ----                   ----                       -------
-  Normal  SuccessfulRescale  2m50s (x3 over 6d23h)  horizontal-pod-autoscaler  New size: 3; reason: pods metric prometheus.googleapis.com|dcgm_fil_dev_gpu_util
-```
-
-The following shows the deployment has scaled from 1 to 3 replicas.
-
-```
-$ kubectl get deploy/vllm-gemma-deployment
-NAME                    READY   UP-TO-DATE   AVAILABLE   AGE
-vllm-gemma-deployment   3/3     3            1           8d
-```
-
-
-## VI. Cleanup
-
-If deleting cluster, this will remove all Kubernetes resources:
-
-* Delete the GKE Autopilot cluster to avoid ongoing charges (uses $REGION which is set to `us-central1`):
+1.  **Verify the DCGM Exporter:**
+    First, confirm that the `dcgm-exporter` pods are running in the `gke-managed-system` namespace.
     ```bash
-    $ gcloud container clusters delete $CLUSTER_NAME --region=$REGION --project $PROJECT_ID
-	```
-
-* Then delete gcloud resources
+    kubectl get pods -n gke-managed-system | grep dcgm-exporter
     ```
-$ gcloud projects remove-iam-policy-binding seans-devel \
-    --member="serviceAccount:metrics-adapter-gsa@seans-devel.iam.gserviceaccount.com" \
-    --role="roles/monitoring.viewer"
 
-$ gcloud iam service-accounts remove-iam-policy-binding \
-    metrics-adapter-gsa@seans-devel.iam.gserviceaccount.com \
-    --role="roles/iam.workloadIdentityUser" \
-    --member="serviceAccount:seans-devel.svc.id.goog[custom-metrics/custom-metrics-stackdriver-adapter]"
-
-$ gcloud iam service-accounts delete metrics-adapter-gsa \
-    --project=seans-devel \
-```
-
-Otherwise, delete just the Kubernetes HPA resources
-
-* Delete the Kubernetes resources:
+2.  **Apply the Monitoring Configuration:**
+    Because the DCGM exporter resides in a managed, protected namespace, a standard `PodMonitoring` resource cannot be used. Instead, you must apply a `ClusterPodMonitoring` resource, which has the necessary permissions. The `gpu-rules.yaml` file is also applied to create a lowercase, HPA-compatible version of the GPU metric.
     ```bash
-	$ kubectl delete hpa/gemma-server-gpu-hpa
-	$ kubectl delete -f ./stack-driver-adapter.yaml
-	$ kubectl delete namespace custom-metrics
-	$ kubectl delete cloudpodmonitoring/nvidia-dcgm-exporter-hpa-source
-	$ kubectl delete service llm-service
-	$ kubectl delete deployment vllm-gemma-deployment
-	$ kubectl delete secret hf-secret
+    kubectl apply -f ./gpu-pod-monitoring.yaml
+    kubectl apply -f ./gpu-rules.yaml
+    ```
+
+3.  **Verify the Configuration:**
+    Check that the metric `dcgm_fi_dev_gpu_util` is being collected by querying it in the **Metrics explorer** in the Google Cloud Console. This metric represents the percentage of time that the GPU's compute kernels were active and is the primary indicator of GPU load.
+
+---
+
+## Step 2: Deploy and Configure the Stackdriver Adapter
+
+To allow the HPA to use the GPU metrics you've just collected, you must deploy the Custom Metrics Stackdriver Adapter.
+
+Follow the detailed instructions in the appendix:
+**[Appendix: Configuring the Stackdriver Adapter for HPA](./stackdriver-adapter-setup.md)**
+
+---
+
+## Step 3: Deploy the Horizontal Pod Autoscaler
+
+Now you can deploy the HPA, which will monitor the `dcgm_fi_dev_gpu_util` metric and scale the `vllm-gemma-deployment` accordingly.
+
+1.  **Apply the HPA Manifest:**
+    The `gpu-horizontal-pod-autoscaler.yaml` manifest defines the scaling behavior. It targets an average GPU utilization of `20%`. If the average utilization across all pods exceeds this threshold, the HPA will add more replicas (up to a maximum of 5).
+    ```bash
+    kubectl apply -f ./gpu-horizontal-pod-autoscaler.yaml
+    ```
+
+2.  **Verify the HPA's Status:**
+    Inspect the HPA to confirm it's active and has successfully read the metric.
+    ```bash
+    kubectl describe hpa/gemma-server-gpu-hpa
+    ```
+    Key things to check for:
+    *   **Metrics:** The `Metrics` line should show the current GPU utilization against the target (e.g., `0 / 20`).
+    *   **Conditions:** The `ScalingActive` condition should be `True` with the reason `ValidMetricFound`. This confirms the HPA can see and understand the metric from the Stackdriver Adapter.
+
+---
+
+## Step 4: Test the Autoscaling Functionality
+
+Generate a sustained load on the inference server to increase GPU utilization and trigger an autoscaling event.
+
+1.  **Expose the Service Locally:**
+    ```bash
+    kubectl port-forward service/llm-service 8081:8081
+    ```
+
+2.  **Start the Load Generator:**
+    In a new terminal, run the provided `request-looper.sh` script to send a continuous stream of inference requests.
+    ```bash
+    ./request-looper.sh
+    ```
+
+3.  **Observe the Scaling Behavior:**
+    As the script runs, the GPU utilization will increase. You can watch the HPA react to this change.
+    ```bash
+    # Watch the HPA's status and events in real-time
+    kubectl describe hpa/gemma-server-gpu-hpa
+
+    # In another terminal, watch the number of deployment replicas increase
+    kubectl get deploy/vllm-gemma-deployment -w
+    ```
+    You will see a `SuccessfulRescale` event in the HPA's description, and the number of ready pods for the `vllm-gemma-deployment` will increase from 1 to the new target as utilization surpasses the 20% threshold.
+
+---
+
+## Step 5: Cleanup
+
+To avoid ongoing charges, remember to delete the resources you've created.
+
+*   **Option A: Delete HPA Resources Only:**
+    ```bash
+    kubectl delete hpa/gemma-server-gpu-hpa
+    kubectl delete -f ./stack-driver-adapter.yaml
+    kubectl delete namespace custom-metrics
+    kubectl delete -f ./gpu-pod-monitoring.yaml
+    kubectl delete -f ./gpu-rules.yaml
+    ```
+
+*   **Option B: Delete All Kubernetes Resources:**
+    This removes the HPA components and the vLLM server itself.
+    ```bash
+    kubectl delete hpa/gemma-server-gpu-hpa
+    kubectl delete -f ./stack-driver-adapter.yaml
+    kubectl delete namespace custom-metrics
+    kubectl delete -f ./gpu-pod-monitoring.yaml
+    kubectl delete -f ./gpu-rules.yaml
+    kubectl delete service llm-service
+    kubectl delete deployment vllm-gemma-deployment
+    kubectl delete secret hf-secret
     ```
