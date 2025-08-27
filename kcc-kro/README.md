@@ -134,11 +134,11 @@ kubectl get job,deployment,service -n ${NAMESPACE}
     --header "Content-type: application/json" \
     -s \
     localhost:8000/generate \
-    --data 
-    {
+    --data \
+    '{
         "prompt": "What are the top 5 programming languages",
         "max_tokens": 200
-    }
+    }'
     ```
 
     You should see a JSON response with the model's output.
