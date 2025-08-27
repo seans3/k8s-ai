@@ -12,9 +12,7 @@ The implementation follows a clear, three-tiered architecture:
 
 2.  **Model Deployments & Services (`vllm-deployment.yaml`, `vllm-service.yaml`)**: The VLLM inference server is deployed as a separate Kubernetes `Deployment`. This isolates the workload, allowing it to be scaled and updated independently. The `Deployment` is exposed internally by a `ClusterIP` `Service`, which provides a stable network endpoint for the gateway to target.
 
-3.  **Inference Gateway (`gateway.yaml`, `httproute.yaml`)**: The `InferenceGateway` custom resource is the core of this architecture. It automatically provisions a Google Cloud Internal Load Balancer and is configured with routing rules defined in the `HTTPRoute` resource. It inspects the request path and forwards traffic to the appropriate backend `Service`.
-
-4. **Inference Models (`inference-model.yaml`)**: The `InferenceModel` custom resources define the models that will be served by the inference server. This allows for dynamic model management and versioning.
+3.  **Inference Gateway and Models (`gateway.yaml`, `httproute.yaml`, `inference-model.yaml`)**: The `InferenceGateway` custom resource is the core of this architecture. It automatically provisions a Google Cloud Internal Load Balancer, and the `HTTPRoute` resource defines the routing rules. The `InferenceModel` custom resources define the specific models to be served, allowing for dynamic management. The gateway inspects the request path and forwards traffic to the appropriate backend `Service`.
 
 ---
 ## LoRA and Efficient Multi-Model Serving
