@@ -1,3 +1,10 @@
+# This manifest defines a Kubernetes Deployment for the vLLM inference server.
+# A Deployment manages a set of replica Pods, ensuring that a specified number
+# of them are running. Key aspects of this configuration include:
+#   - Requesting a specific NVIDIA GPU resource for hardware acceleration.
+#   - Mounting a memory-backed volume for shared memory (`/dev/shm`), which is critical for performance.
+#   - Securely passing a Hugging Face token via a Kubernetes secret.
+#   - Using a nodeSelector to ensure Pods are scheduled on nodes with the correct GPU type.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -11,7 +18,6 @@ spec:
     metadata:
       labels:
         app: gemma-server
-        # 1 billion parameter model (smallest)
         ai.gke.io/model: gemma-3-1b-it
         ai.gke.io/inference-server: vllm
         examples.ai.gke.io/source: user-guide
@@ -20,6 +26,8 @@ spec:
       - name: inference-server
         image: us-docker.pkg.dev/vertex-ai/vertex-vision-model-garden-dockers/pytorch-vllm-serve:20250312_0916_RC01
         resources:
+          # Requesting a GPU is the critical step that triggers GKE Autopilot to provision a node
+          # with the necessary hardware. Limits are set to match requests for predictable performance.
           requests:
             cpu: "2"
             memory: "10Gi"
@@ -37,22 +45,25 @@ spec:
         - --host=0.0.0.0
         - --port=8081
         env:
-        # 1 billion parameter model (smallest)
         - name: MODEL_ID
           value: google/gemma-3-1b-it
+        # Securely provides the Hugging Face token to the container.
         - name: HUGGING_FACE_HUB_TOKEN
           valueFrom:
             secretKeyRef:
               name: hf-secret
               key: hf_token
         volumeMounts:
+        # /dev/shm (shared memory) is used by PyTorch for inter-process communication.
+        # Mounting a memory-backed volume here is crucial for performance.
         - mountPath: /dev/shm
           name: dshm
       volumes:
       - name: dshm
         emptyDir:
+            # `medium: Memory` tells Kubernetes to use a RAM-backed filesystem (tmpfs).
             medium: Memory
+      # Ensures the Pod is scheduled on a node with the specified GPU type.
       nodeSelector:
-        # Nvidia L4 GPU
         cloud.google.com/gke-accelerator: nvidia-l4
         cloud.google.com/gke-gpu-driver-version: latest
