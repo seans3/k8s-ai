@@ -1,122 +1,165 @@
-# Summary: AI Inference (GKE/GPU/vLLM/gemma)
+# AI Inference on GKE Autopilot with vLLM and Gemma
 
-Before you begin, ensure you have completed all necessary setup steps.
-Please see the [Prerequisites Guide](./prerequisites.md) for detailed instructions.
+This guide provides a comprehensive walkthrough for deploying a vLLM-powered AI inference server for the Gemma model on Google Kubernetes Engine (GKE) Autopilot. By the end of this guide, you will have a scalable, GPU-accelerated endpoint for your AI model.
 
-## I. Create and Configure Google Cloud Resources
+## 1. Deploy and Serve the Model
 
-1.  **Create a GKE Autopilot Cluster:**
-    * GKE Autopilot manages your cluster's nodes, automatically provisioning resources like GPUs when your workloads request them. You do not need to manually create and configure GPU node pools. The `$REGION` variable (set to `us-central1` in prerequisites) will be used here.
-    * Create a GKE Autopilot cluster:
-        ```bash
-        gcloud container clusters create-auto $CLUSTER_NAME \
-            --project=$PROJECT_ID \
-            --region=$REGION
-        ```
-        *(Note: Autopilot cluster creation might take a few minutes. You can add `--release-channel=rapid` or other configurations if needed, similar to Standard clusters.)*
-    * Connect `kubectl` to your GKE Autopilot cluster:
-        ```bash
-        gcloud container clusters get-credentials $CLUSTER_NAME --region=$REGION --project $PROJECT_ID
-        ```
-2.  **Create Kubernetes Secret for Hugging Face Token:**
-    * Store your Hugging Face token as a Kubernetes secret. This allows pods in your GKE cluster to securely authenticate with Hugging Face to download model files.
-        ```bash
-        kubectl create secret generic hf-secret \
-            --from-literal=hf_token=$HF_TOKEN
-        ```
+This section covers the core steps to get the vLLM server running and accessible.
 
-## II. Deploy vLLM
+### Step 1: Deploy the vLLM Server
+Apply the deployment manifest to your GKE cluster. This will create a Kubernetes Deployment that manages the vLLM server pods.
 
-1.  **Define Kubernetes Deployment YAML:**
-    * Create a `vllm-deployment.yaml` file using the raw YAML content provided separately. This file defines a Kubernetes Deployment resource that manages your vLLM pods.
-    * Refer to the [vllm-deployment.yaml](./vllm-deployment.yaml) file (which you will create with the provided YAML content).
-    * **Key configurations in this file include:**
-        * `spec.replicas`: Number of vLLM instances.
-        * `spec.template.spec.containers`:
-            * `image`: The vLLM Docker image (eg. pytorch-vllm-serve)
-            * `env`: Environment variables, including `HF_TOKEN` (mounted from the secret).
-            * `args`: Command-line arguments for the vLLM server, such as `--model`, model name, `--port 8081`, and potentially `--tensor-parallel-size`.
-            * `resources.limits`: **Crucially, specify the GPU resources required (e.g., `nvidia.com/gpu: "1"`)**. This tells Autopilot to provision a node with the requested GPU type for this pod. You might also need to add a `nodeSelector` for the specific GPU type if not using default Autopilot GPU classes (e.g., `cloud.google.com/gke-accelerator: nvidia-l4`).
-            * `ports.containerPort`: The port vLLM listens on.
-            * Readiness and Liveness probes to ensure pod health.
-2.  **Apply the Deployment Manifest:**
-    * Deploy vLLM to your GKE cluster using `kubectl`:
-        ```bash
-        kubectl apply -f vllm-deployment.yaml
-        ```
-3.  **Monitor Deployment Status:**
-    * Check the status of your pods. Autopilot will take some time to provision a GPU node if one isn't already available that meets the workload's requirements.
-        ```bash
-        kubectl get pods -l app=gemma-server -w # Assuming your deployment has label app=gemma-server
-        kubectl wait --for=condition=Available --timeout=900s deployment/vllm-gemma-deployment # Adjust name, timeout might need to be longer for initial GPU node provisioning
-        ```
-4.  **View Logs (Recommended):**
-    * Check the logs from the vLLM pods to ensure the model is downloading and the server starts correctly:
-        ```bash
-        kubectl logs -f -l app=gemma-server # Adjust label selector
-        ```
-    * The logs will look something like
-	    ```bash
-        INFO:     Automatically detected platform cuda.
-        ...
-        INFO      [launcher.py:34] Route: /v1/chat/completions, Methods: POST
-        ...
-        INFO:     Started server process [13]
-        INFO:     Waiting for application startup.
-        INFO:     Application startup complete.
-        Default STARTUP TCP probe succeeded after 1 attempt for container "vllm--google--gemma-3-1b-it-1" on port 8081.
-        ```
+```bash
+kubectl apply -f vllm-deployment.yaml
+```
 
-## III. Serve the Model (Expose and Interact)
+### Step 2: Expose the Service
+Apply the service manifest to expose the vLLM deployment within the cluster via a stable `ClusterIP`.
 
-1.  **Define Kubernetes Service YAML (as ClusterIP):**
-    * Create a `vllm-service.yaml` file using the raw YAML content provided separately. This defines a Kubernetes Service to expose your vLLM deployment internally within the cluster.
-    * Refer to the [vllm-service.yaml](./vllm-service.yaml) file (which you will create with the provided YAML content).
-    * **Key configurations in this file include:**
-        * `type: ClusterIP`: This makes the service reachable only from within the GKE cluster. For local testing/development, you will typically use `kubectl port-forward`.
-        * `spec.selector`: Must match the labels of your vLLM deployment's pods.
-        * `spec.ports`: Define the port the service listens on (e.g., `port: 8081`) and the `targetPort` (the container port of vLLM, in this case also 8081, or its named port).
-2.  **Apply the Service Manifest:**
-    ```bash
-    kubectl apply -f vllm-service.yaml
-    ```
-3.  **Accessing the Service (via Port Forwarding for Local Testing):**
-    * Since `ClusterIP` services are not directly accessible externally, use `kubectl port-forward` to forward traffic from your local machine to the service within the cluster.
-        ```bash
-        # Forward a local port (e.g., 8080) to the service port (e.g., 8081)
-        kubectl port-forward service/vllm-service 8080:8081 # Adjust service name, local port, and service port as needed
-        ```
-        Now, requests to `localhost:8080` on your machine will be forwarded to port `8081` on the `vllm-service` inside GKE.
-4.  **Interact with the Model:**
-    * **Using `curl` (via port-forward):** Send HTTP POST requests to `localhost` on the port you forwarded.
-        ```bash
-        curl -X POST http://localhost:8080/v1/chat/completions \
-        -H "Content-Type: application/json" \
-        -d '{
-            "model": "google/gemma-3-1b-it",
-            "messages": [{"role": "user", "content": "Explain Quantum Computing in simple terms."}]
-        }'
-        ```
-    * **(Optional) Gradio Interface:** If the tutorial includes a Gradio UI, it would typically be deployed as another service within the cluster that communicates with the `vllm-service` (ClusterIP). You would then port-forward to the Gradio service to access its UI.
+```bash
+kubectl apply -f vllm-service.yaml
+```
 
-## IV. Observe and Troubleshoot
+### Step 3: Monitor the Deployment
+GKE Autopilot will automatically provision a GPU node for your workload, which may take several minutes. Monitor the pod status until it is `Running`.
 
-* Use `kubectl logs deployment/<deployment-name>` to view logs.
-* Use `kubectl describe pod <pod-name>` to get detailed information about a specific pod, including events. Note that with Autopilot, node-level details are abstracted.
-* Monitor GPU utilization and performance using Cloud Monitoring.
+```bash
+# Watch the pods until they are in the "Running" state
+kubectl get pods -l app=vllm-gemma-server -w
 
-## V. Clean Up
+# (Optional) Wait for the deployment to be fully available (timeout of 15 minutes)
+kubectl wait --for=condition=Available --timeout=900s deployment/vllm-gemma-deployment
+```
 
-* Delete the Kubernetes resources:
-    ```bash
-    kubectl delete service vllm-service # Adjust name
-    kubectl delete deployment vllm-gemma-deployment # Adjust name
-    kubectl delete secret hf-secret
-    ```
-* Delete the GKE Autopilot cluster to avoid ongoing charges (uses $REGION which is set to `us-central1`):
-    ```bash
-    gcloud container clusters delete $CLUSTER_NAME --region=$REGION --project $PROJECT_ID
-    ```
-* Remove any other Google Cloud resources created.
+### Step 4: Access and Test the Endpoint
+Use `kubectl port-forward` to access the service from your local machine.
 
-**Note:** Always refer to the specific YAML files and detailed commands in the official Google Cloud documentation. For GKE Autopilot, pay close attention to how GPU types are requested in your workload manifest (e.g., using `resources.limits` and potentially `nodeSelector` for specific accelerator types available in Autopilot like `cloud.google.com/gke-accelerator: nvidia-tesla-t4` or `cloud.google.com/gke-accelerator: nvidia-l4`).
+```bash
+# In a new terminal, forward local port 8080 to the service's port 8081
+kubectl port-forward service/vllm-service 8080:8081
+```
+
+With port forwarding active, send an inference request using `curl`:
+
+```bash
+curl -X POST http://localhost:8080/v1/chat/completions \
+-H "Content-Type: application/json" \
+-d 
+    "{
+        \"model\": \"$MODEL_ID\",
+        \"messages\": [{\"role\": \"user\", \"content\": \"Explain Quantum Computing in simple terms.\"}]
+    }"
+```
+
+---
+
+## 2. Understanding the Configuration
+
+The behavior of the inference server is defined in two key files:
+
+- **`vllm-deployment.yaml`**: Defines the state of the vLLM server. Key fields include:
+    - **`replicas`**: The number of vLLM instances.
+    - **`image`**: The vLLM Docker image.
+    - **`args`**: Command-line arguments for the vLLM server, including the model ID.
+    - **`resources.limits`**: Specifies the required GPU resources (e.g., `nvidia.com/gpu: "1"`). **This is crucial for Autopilot to provision a GPU node.**
+    - **`nodeSelector`**: Specifies the GPU type (e.g., `cloud.google.com/gke-accelerator: nvidia-l4`).
+
+- **`vllm-service.yaml`**: Defines how to access the vLLM pods. It creates a stable internal IP address and DNS name for the service.
+
+---
+
+## 3. Advanced Topics
+
+### Horizontal Pod Autoscaling (HPA)
+For automatic scaling based on traffic, refer to the [Horizontal Pod Autoscaling guide](./hpa/README.md).
+
+### Troubleshooting
+- **View logs:** `kubectl logs -f -l app=vllm-gemma-server`
+- **Describe pod:** `kubectl describe pod <pod-name>` to see events and configuration details.
+
+---
+
+## 4. Initial Setup (Prerequisites)
+
+This is a one-time setup to prepare your environment.
+
+### Step 1: Set Environment Variables
+Set the following environment variables in your shell.
+
+```bash
+# Replace with your actual project ID
+export PROJECT_ID="your-project-id"
+
+# GKE cluster name
+export CLUSTER_NAME="vllm-gemma-cluster"
+
+# Google Cloud region
+export REGION="us-central1"
+
+# Hugging Face access token
+export HF_TOKEN="your-hugging-face-token"
+
+# The model to deploy
+export MODEL_ID="google/gemma-2b-it"
+```
+
+### Step 2: Configure Google Cloud
+- Select or create a [Google Cloud project](https://console.cloud.google.com/projectcreate).
+- Ensure [billing is enabled](https://cloud.google.com/billing/docs/how-to/modify-project).
+- Enable the **Kubernetes Engine API**:
+  ```bash
+  gcloud services enable container.googleapis.com
+  ```
+- Ensure you have `Kubernetes Engine Admin` IAM permissions.
+
+### Step 3: Install Tools
+- **Google Cloud CLI (`gcloud`):** Install the [Google Cloud CLI](https://cloud.google.com/sdk/docs/install-sdk) and initialize it:
+  ```bash
+  gcloud init
+  ```
+- **`kubectl`:** Install via `gcloud`:
+  ```bash
+  gcloud components install kubectl
+  ```
+
+### Step 4: Get Hugging Face Token
+- Create a [Hugging Face account](https://huggingface.co/join).
+- Accept the license for your chosen model (e.g., [google/gemma-2b-it](https://huggingface.co/google/gemma-2b-it)).
+- Generate an [access token](https://huggingface.co/docs/hub/en/security-tokens) with 'Read' permissions.
+
+### Step 5: Create GKE Cluster and Kubernetes Secret
+- Create the GKE Autopilot cluster:
+  ```bash
+  gcloud container clusters create-auto $CLUSTER_NAME \
+      --project=$PROJECT_ID \
+      --region=$REGION
+  ```
+- Connect `kubectl` to your new cluster:
+  ```bash
+  gcloud container clusters get-credentials $CLUSTER_NAME \
+      --region=$REGION \
+      --project $PROJECT_ID
+  ```
+- Create the Kubernetes secret for your Hugging Face token:
+  ```bash
+  kubectl create secret generic hf-secret \
+      --from-literal=hf_token=$HF_TOKEN
+  ```
+
+---
+
+## 5. Clean Up
+
+To avoid ongoing charges, delete the resources you created.
+
+```bash
+# Delete Kubernetes resources
+kubectl delete service vllm-service
+kubectl delete deployment vllm-gemma-deployment
+kubectl delete secret hf-secret
+
+# Delete the GKE cluster
+gcloud container clusters delete $CLUSTER_NAME \
+    --region=$REGION \
+    --project $PROJECT_ID
+```
