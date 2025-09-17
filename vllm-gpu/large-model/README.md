@@ -13,6 +13,23 @@ The primary goal of this project is to serve a multi-billion parameter model eff
 *   **Tensor Parallelism:** The deployment is configured with `--tensor-parallel-size 4`. This means that instead of loading the entire model onto one GPU, VLLM shards the model across all four available GPUs. When a request arrives, all four GPUs work on their piece of the model simultaneously, drastically reducing latency.
 *   **Single Node, Multiple GPUs:** GKE Autopilot provisions a single, powerful node (a virtual machine) that has four physical A100 GPUs attached to it. The VLLM pod runs on this single node and utilizes all four GPUs for its tensor parallel setup.
 
+### VRAM Considerations: Why 80GB GPUs are Necessary
+
+It is important to understand why GPUs with a large amount of VRAM (like the 80GB A100) are required, even when using tensor parallelism. The memory calculation is more complex than just the model's size.
+
+The VRAM on each GPU in the tensor parallel group must be sufficient to hold its fraction of the model's weights **plus** the memory overhead for every request it is processing.
+
+1.  **Model Weights:** The `gemma-3-27b-it` model has 27 billion parameters. When loaded in `bfloat16` precision (2 bytes per parameter), the model requires approximately **54 GB** of VRAM.
+    *   With a tensor parallel size of 4, each GPU holds a shard of the weights: `54 GB / 4 = 13.5 GB`.
+
+2.  **The KV Cache:** The most significant memory overhead comes from the Key-Value (KV) Cache. VLLM uses this cache to store the attention state of ongoing sequences, which dramatically speeds up token generation. The size of this cache depends on the number of concurrent requests and the context length (`--max-model-len`).
+    *   For a large model with a long context length (like 16384 in our configuration), the KV cache can easily consume an additional **10-20 GB of VRAM per GPU** under load.
+
+**Example Calculation for a single A100 80GB GPU:**
+`13.5 GB (Model Shard) + ~15 GB (KV Cache) + ~2 GB (Framework Overhead) = ~30.5 GB`
+
+This fits comfortably within the **80 GB** of VRAM on an A100. However, this calculation shows why a smaller GPU like an L4 (24 GB) would fail, as the required memory would exceed its capacity.
+
 ### Validated Configuration: NVIDIA A100
 
 This is the configuration that has been successfully deployed and tested.
