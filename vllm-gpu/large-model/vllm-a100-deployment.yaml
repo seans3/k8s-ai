@@ -29,14 +29,14 @@ spec:
         cloud.google.com/gke-accelerator: nvidia-a100-80gb
       containers:
       - name: vllm-server
-        image: vllm/vllm-openai:latest
+        image: vllm/vllm-openai:v0.4.0
         resources:
           limits:
             nvidia.com/gpu: 4
         command: ["/bin/sh", "-c"]
         args:
           - >-
-            python -m vllm.entrypoints.openai.api_server
+            python3 -m vllm.entrypoints.api_server
             --model google/gemma-3-27b-it
             --served-model-name gemma-3-27b-it
             --tensor-parallel-size 4
@@ -49,6 +49,8 @@ spec:
         - name: http
           containerPort: 8000
         env:
+        - name: VLLM_TARGET_DEVICE
+          value: "cuda"
         - name: HUGGING_FACE_HUB_TOKEN
           valueFrom:
             secretKeyRef:
