@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: vllm-gemma-3-27b-service
+  labels:
+    # --- Label for selection (matches the pods) ---
+    app: vllm-gemma-3-27b
+    # --- Labels for GKE Observability ---
+    ai.gke.io/model: gemma-3-27b-it
+    ai.gke.io/inference-server: vllm
+    examples.ai.gke.io/source: user-guide
+spec:
+  type: ClusterIP
+  ports:
+  - port: 80
+    targetPort: http 
+    protocol: TCP
+    name: http
+  selector:
+    # This MUST match the 'app' label in the Deployment's pod template
+    app: vllm-gemma-3-27b
