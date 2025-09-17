@@ -29,16 +29,16 @@ spec:
         cloud.google.com/gke-accelerator: nvidia-a100-80gb
       containers:
       - name: vllm-server
-        image: vllm/vllm-openai:v0.4.0
+        image: us-docker.pkg.dev/vertex-ai/vertex-vision-model-garden-dockers/pytorch-vllm-serve:20250312_0916_RC01
         resources:
           limits:
             nvidia.com/gpu: 4
         command: ["/bin/sh", "-c"]
         args:
           - >-
-            python3 -m vllm.entrypoints.api_server
+            python3 -m vllm.entrypoints.openai.api_server
             --model google/gemma-3-27b-it
-            
+            --served-model-name gemma-3-27b-it
             --tensor-parallel-size 4
             --gpu-memory-utilization 0.95
             --max-model-len 16384
