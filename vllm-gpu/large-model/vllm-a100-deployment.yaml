@@ -38,7 +38,7 @@ spec:
           - >-
             python3 -m vllm.entrypoints.api_server
             --model google/gemma-3-27b-it
-            --served-model-name gemma-3-27b-it
+            
             --tensor-parallel-size 4
             --gpu-memory-utilization 0.95
             --max-model-len 16384
