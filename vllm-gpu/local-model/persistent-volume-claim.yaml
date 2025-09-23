@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: vllm-model-cache
+spec:
+  accessModes:
+    - ReadOnlyMany
+  resources:
+    requests:
+      storage: 100Gi
+  storageClassName: ""          # <-- SET TO EMPTY STRING to disable dynamic
+  volumeName: vllm-gcs-pv   # <-- This claims your specific PV
+

@@ -1,0 +1,29 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: gcs-permission-test-v6
+  namespace: default
+spec:
+  serviceAccountName: vllm-sa
+  containers:
+  - name: test-container
+    image: alpine:latest
+    command: ["/bin/sh", "-c"]
+    args:
+    - |
+      echo "Attempting to get GSA token from metadata server..."
+      wget -q -O - --header="Metadata-Flavor: Google" --timeout=5 http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token
+      if [ $? -eq 0 ]; then
+        echo
+        echo "---"
+        echo "SUCCESS: Got a valid JSON response from metadata server."
+        echo "This means Workload Identity is working, but the GCS API is denying your token."
+      else
+        echo
+        echo "---"
+        echo "ERROR: Failed to get a response from metadata server (wget exit code: $?)."
+        echo "This proves the pod cannot reach the metadata server, or the server is failing."
+        echo "This is NOT an IAM Deny policy. This is a node-level system failure."
+        exit 1
+      fi
+  restartPolicy: Never
