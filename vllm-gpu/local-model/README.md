@@ -12,6 +12,8 @@ This document provides the steps to deploy a vLLM inference server on GKE, loadi
 
 ### Step 1: Configure Service Accounts and Workload Identity
 
+TODO: Update these steps to use [GKE Federation Identity](https://cloud.google.com/kubernetes-engine/docs/concepts/workload-identity)
+
 These steps create a GCP service account, a Kubernetes service account, and binds them together to allow the pod to access GCS.
 
 1.  **Set environment variables:**
