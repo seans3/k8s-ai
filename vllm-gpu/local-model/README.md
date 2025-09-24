@@ -155,3 +155,159 @@ The most critical performance benefit comes from caching the model on a persiste
 | :--- | :--- | :--- | :--- |
 | **Initial Startup** | Very fast download from GCS. | Slower download from public internet. | **This Project** |
 | **Subsequent Startups** | **No download needed.** Loads from disk. | **Full download required every time.** | **This Project (by a large margin)** |
+
+---
+
+## Alternative Strategy: Pre-loading a Persistent Disk for Instant Startup
+
+The `initContainer` pattern is a robust and flexible way to manage model data, but it still requires a one-time download per Persistent Volume Claim. For the absolute fastest startup time, you can pre-load a GCE Persistent Disk with the model data *before* using it in your cluster. This eliminates the initial download entirely.
+
+### Pros and Cons
+
+| Pros | Cons |
+| :--- | :--- |
+| **Fastest Possible Startup:** Pods start almost instantly, as there is zero download time. | **More Complex Setup:** The initial, one-time setup is significantly more involved. |
+| **Decoupled Workflow:** Model preparation becomes a separate, offline infrastructure task. | **Manual Model Updates:** To update the model, you must repeat the entire process. |
+
+### Detailed Workflow
+
+#### Step 1: Create a Temporary VM and the Source Disk
+
+First, create a GCE disk and a temporary VM in the same zone as your GKE cluster.
+
+```bash
+# Create the persistent disk that will hold the model
+gcloud compute disks create vllm-model-source-disk \
+    --size=50GB \
+    --type=pd-standard \
+    --zone=us-central1-a # IMPORTANT: Use the same zone as your GKE cluster
+
+# Create a small, temporary VM to load data onto the disk
+gcloud compute instances create model-loader-vm \
+    --machine-type=e2-micro \
+    --zone=us-central1-a
+
+# Attach the disk to the temporary VM
+gcloud compute instances attach-disk model-loader-vm \
+    --disk=vllm-model-source-disk \
+    --zone=us-central1-a
+```
+
+#### Step 2: Load the Model Data onto the Disk
+
+SSH into the VM and copy the model files from GCS to the attached disk.
+
+```bash
+# SSH into the temporary VM
+gcloud compute ssh model-loader-vm --zone=us-central1-a
+
+# Inside the VM, format and mount the attached disk
+sudo mkfs.ext4 -m 0 -E lazy_itable_init=0,lazy_journal_init=0,discard /dev/sdb
+sudo mkdir -p /mnt/disks/model-cache
+sudo mount -o discard,defaults /dev/sdb /mnt/disks/model-cache
+sudo chmod a+w /mnt/disks/model-cache
+
+# Download the model from GCS to the mounted disk
+gcloud storage cp -r gs://ai-llm-models/hf/gemma-3-1b-it /mnt/disks/model-cache/
+
+# Exit the VM
+exit
+```
+
+#### Step 3: Detach the Disk and Clean Up the VM
+
+Once the disk is populated, you no longer need the temporary VM.
+
+```bash
+# Detach the now-populated disk from the VM
+gcloud compute instances detach-disk model-loader-vm \
+    --disk=vllm-model-source-disk \
+    --zone=us-central1-a
+
+# Delete the temporary VM
+gcloud compute instances delete model-loader-vm --zone=us-central1-a --quiet
+```
+
+#### Step 4: Create a Kubernetes PV and PVC
+
+Create a `PersistentVolume` (PV) that explicitly points to your pre-loaded GCE disk. Then, create a `PersistentVolumeClaim` (PVC) that binds to that specific PV. This prevents Kubernetes from trying to dynamically provision a new, empty disk.
+
+Create a new file, `preloaded-volume.yaml`:
+
+```yaml
+# preloaded-volume.yaml
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: vllm-model-cache-pv
+spec:
+  capacity:
+    storage: 50Gi
+  accessModes:
+    - ReadWriteOnce
+  gcePersistentDisk:
+    pdName: vllm-model-source-disk # <-- Points to your specific GCE disk
+    fsType: ext4
+  storageClassName: "" # An empty storage class prevents dynamic provisioning
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: vllm-model-cache
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 50Gi
+  volumeName: vllm-model-cache-pv # <-- Binds this claim to our specific PV
+  storageClassName: "" # Must match the PV
+```
+
+Apply this manifest to your cluster:
+```bash
+# Note: Delete the old PVC first if it exists
+kubectl delete pvc vllm-model-cache --ignore-not-found
+kubectl apply -f preloaded-volume.yaml
+```
+
+#### Step 5: Update the Deployment
+
+Finally, modify your `vllm-deployment.yaml` to remove the `initContainers` section entirely, as it is no longer needed.
+
+```yaml
+# vllm-deployment.yaml (modified)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vllm-gemma-1b
+  # ...
+spec:
+  # ...
+  template:
+    metadata:
+      # ...
+    spec:
+      serviceAccountName: vllm-sa
+      # NO initContainers section needed anymore!
+      containers:
+      - name: vllm-container
+        image: us-docker.pkg.dev/vertex-ai/vertex-vision-model-garden-dockers/pytorch-vllm-serve:20250312_0916_RC01
+        command: ["python", "-m", "vllm.entrypoints.openai.api_server"]
+        args:
+          - "--model=/models/gemma-3-1b-it"
+          - "--max-model-len=4096"
+        # ...
+        volumeMounts:
+        - name: model-cache-volume
+          mountPath: /models
+      volumes:
+      - name: model-cache-volume
+        persistentVolumeClaim:
+          claimName: vllm-model-cache
+      # ...
+```
+
+After applying the updated deployment, the vLLM pod will start and find the model data already present on the persistent disk, achieving the fastest possible startup time.
+
+```
