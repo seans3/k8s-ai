@@ -1,7 +1,9 @@
 apiVersion: storage.k8s.io/v1
 kind: StorageClass
 metadata:
-  name: gcs-fuse-csi
-provisioner: gcs.csi.storage.gke.io
+  name: standard-gce-pd
+provisioner: pd.csi.storage.gke.io
 parameters:
-  type: gcs-fuse
+  type: pd-standard
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true

@@ -11,22 +11,34 @@ spec:
       app: vllm-gemma-1b
   template:
     metadata:
-      annotations:
-        gke-gcs-fuse-csi: "true"
       labels:
         app: vllm-gemma-1b
         ai.gke.io/model: gemma-3-1b-it
         ai.gke.io/inference-server: vllm
     spec:
       serviceAccountName: vllm-sa
+      initContainers:
+      - name: model-downloader
+        image: google/cloud-sdk:slim
+        command: ["/bin/sh", "-c"]
+        args:
+        - |
+          set -e -x
+          export CLOUDSDK_AUTH_ACCESS_TOKEN=$(gcloud auth print-access-token --impersonate-service-account=vllm-gcs-reader@seans-devel.iam.gserviceaccount.com)
+          gcloud storage cp -r gs://ai-llm-models/hf/gemma-3-1b-it /models/
+        volumeMounts:
+        - name: model-cache-volume
+          mountPath: /models
+        - name: gcp-sa-token
+          mountPath: /var/run/secrets/tokens
+          readOnly: true
       containers:
       - name: vllm-container
-        image: vllm/vllm-openai:latest
+        image: us-docker.pkg.dev/vertex-ai/vertex-vision-model-garden-dockers/pytorch-vllm-serve:20250312_0916_RC01
+        command: ["python", "-m", "vllm.entrypoints.openai.api_server"]
         args:
-          - "--model"
-          - "/models/hf/gemma-3-1b-it"
-          - "--max-model-len"
-          - "4096"
+          - "--model=/models/gemma-3-1b-it"
+          - "--max-model-len=4096"
         resources:
           limits:
             nvidia.com/gpu: "1"
@@ -35,11 +47,16 @@ spec:
         volumeMounts:
         - name: model-cache-volume
           mountPath: /models
-          readOnly: true
       volumes:
       - name: model-cache-volume
         persistentVolumeClaim:
           claimName: vllm-model-cache
-          readOnly: true
+      - name: gcp-sa-token
+        projected:
+          sources:
+          - serviceAccountToken:
+              path: gcp-sa-token
+              audience: gcs
+              expirationSeconds: 3600
       nodeSelector:
         cloud.google.com/gke-accelerator: nvidia-l4

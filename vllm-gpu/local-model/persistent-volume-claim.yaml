@@ -4,10 +4,8 @@ metadata:
   name: vllm-model-cache
 spec:
   accessModes:
-    - ReadOnlyMany
+    - ReadWriteOnce
   resources:
     requests:
-      storage: 100Gi
-  storageClassName: ""          # <-- SET TO EMPTY STRING to disable dynamic
-  volumeName: vllm-gcs-pv   # <-- This claims your specific PV
-
+      storage: 50Gi
+  storageClassName: standard-gce-pd
