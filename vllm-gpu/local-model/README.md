@@ -312,4 +312,75 @@ spec:
 
 After applying the updated deployment, the vLLM pod will start and find the model data already present on the persistent disk, achieving the fastest possible startup time.
 
+## Optional: Optimizing for Cost by Scaling to Zero
+
+After you've successfully deployed your model, your GPU node pool will run 24/7, which can be expensive. The following instructions show you how to configure your cluster to automatically scale your expensive GPU node pool down to **zero nodes** when it's not in use.
+
+### GKE Autopilot
+If you deployed your model on an **Autopilot** cluster, this behavior is **automatic**. You do not need to perform any configuration.
+
+When you are finished with your workload, you simply delete the Deployment. Autopilot detects that no pods are requesting GPUs and will automatically remove the GPU nodes to save costs.
+
+### GKE Standard
+On a GKE Standard cluster, you must configure the Cluster Autoscaler and use taints and tolerations.
+
+### 1. Ensure a Default Node Pool Exists
+
+The cluster needs a non-GPU node pool to run system components when the GPU pool is scaled to zero. If you don't have one, create it.
+
+```bash
+# Skip this if you already have a non-GPU node pool
+gcloud container node-pools create default-pool \
+  --cluster=seans-local-model \
+  --region=us-central1 \
+  --machine-type=e2-medium \
+  --num-nodes=1
+```
+
+### 2. Update Your GPU Node Pool for Autoscaling
+
+Modify your existing `gpu-pool` to enable autoscaling and add a taint. The taint prevents system pods from running on your GPU nodes, which allows the pool to become completely empty.
+
+```bash
+gcloud container node-pools update gpu-pool \
+  --cluster=seans-local-model \
+  --region=us-central1 \
+  --enable-autoscaling \
+  --min-nodes=0 \
+  --max-nodes=5 \
+  --node-taints=nvidia.com/gpu=present:NoSchedule
+```
+
+### 3. Update Your Deployment for the Taint
+
+Edit your `vllm-deployment.yaml` file to add a `tolerations` block so your pods can run on the tainted GPU nodes.
+
+```yaml
+# vllm-deployment.yaml
+# ...
+spec:
+  template:
+    # ...
+    spec:
+      serviceAccountName: vllm-sa
+      tolerations:
+      - key: "nvidia.com/gpu"
+        operator: "Exists"
+        effect: "NoSchedule"
+      containers:
+      - name: vllm-container
+        # ...
+```
+
+Then, apply the change.
+
+```bash
+kubectl apply -f vllm-deployment.yaml
+```
+
+### 4. Trigger the Scale-Down
+When you are finished, delete the deployment to trigger the scale-down.
+
+```bash
+kubectl delete -f vllm-deployment.yaml
 ```
