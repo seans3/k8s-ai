@@ -57,7 +57,8 @@ spec:
     command:
     - /bin/sh
     - -c
-    - "set -e -x; echo 'Attempting to list bucket contents by impersonating ${GCP_SA_EMAIL}...'; gcloud storage ls ${GCS_BUCKET_URI} --impersonate-service-account=${GCP_SA_EMAIL}"
+    # This is the corrected command:
+    - "set -e -x; echo 'Verifying Workload Identity by listing bucket...'; gcloud storage ls ${GCS_BUCKET_URI}"
   restartPolicy: Never
 EOF
 
