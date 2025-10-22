@@ -24,21 +24,20 @@ spec:
         args:
         - |
           set -e -x
-          export CLOUDSDK_AUTH_ACCESS_TOKEN=$(gcloud auth print-access-token --impersonate-service-account=vllm-gcs-reader@seans-devel.iam.gserviceaccount.com)
+          echo "Copying models from GCS..."
           gcloud storage cp -r gs://ai-llm-models/hf/gemma-3-1b-it /models/
+          echo "Model copy complete."
         volumeMounts:
         - name: model-cache-volume
           mountPath: /models
-        - name: gcp-sa-token
-          mountPath: /var/run/secrets/tokens
-          readOnly: true
       containers:
       - name: vllm-container
-        image: us-docker.pkg.dev/vertex-ai/vertex-vision-model-garden-dockers/pytorch-vllm-serve:20250312_0916_RC01
-        command: ["python", "-m", "vllm.entrypoints.openai.api_server"]
+        image: vllm/vllm-openai:v0.11.0
+        command: ["python3", "-m", "vllm.entrypoints.openai.api_server"]
         args:
           - "--model=/models/gemma-3-1b-it"
           - "--max-model-len=4096"
+          - "--gpu-memory-utilization=0.85"
         resources:
           limits:
             nvidia.com/gpu: "1"
@@ -47,6 +46,9 @@ spec:
         volumeMounts:
         - name: model-cache-volume
           mountPath: /models
+        env:
+        - name: LD_LIBRARY_PATH
+          value: "/usr/local/nvidia/lib64:/usr/local/cuda/lib64"
       volumes:
       - name: model-cache-volume
         persistentVolumeClaim:
@@ -59,4 +61,7 @@ spec:
               audience: gcs
               expirationSeconds: 3600
       nodeSelector:
+        # cloud.google.com/gke-accelerator: nvidia-tesla-a100
+        # cloud.google.com/gke-accelerator: nvidia-a100-80gb
+        # cloud.google.com/gke-accelerator: nvidia-h100-80gb
         cloud.google.com/gke-accelerator: nvidia-l4
