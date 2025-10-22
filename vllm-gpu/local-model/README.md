@@ -51,7 +51,7 @@ These steps create a GCP service account, a Kubernetes service account, and bind
 
     ```bash
     gcloud iam service-accounts add-iam-policy-binding \
-      ${GCP_SERVICE_ACCOUNT}@${GCP_PROJECT_ID}.gserviceaccount.com \
+      ${GCP_SERVICE_ACCOUNT}@${GCP_PROJECT_ID}.iam.gserviceaccount.com \
       --role roles/iam.workloadIdentityUser \
       --member "serviceAccount:${GCP_PROJECT_ID}.svc.id.goog[${K8S_NAMESPACE}/${K8S_SERVICE_ACCOUNT}]"
     ```
