@@ -1,0 +1,71 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vllm-gemma-27b
+  labels:
+    app: vllm-gemma-27b
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: vllm-gemma-27b
+  template:
+    metadata:
+      labels:
+        app: vllm-gemma-27b
+        ai.gke.io/model: gemma-3-27b-it
+        ai.gke.io/inference-server: vllm
+    spec:
+      serviceAccountName: vllm-sa
+      tolerations:
+      - key: "nvidia.com/gpu"
+        operator: "Exists"
+        effect: "NoSchedule"
+      - key: "cloud.google.com/gke-spot"
+        operator: "Equal"
+        value: "true"
+        effect: "NoSchedule"
+      initContainers:
+      - name: model-downloader
+        image: google/cloud-sdk:slim
+        command: ["/bin/sh", "-c"]
+        args:
+        - |
+          set -e -x
+          echo "Syncing models from GCS using gsutil rsync..."
+          # Use gsutil rsync: it's multi-threaded, idempotent,
+          # and can exclude the unnecessary .git directory.
+          gsutil -m rsync -r -x "\.git[/$].*" gs://ai-llm-models/hf/gemma-3-27b-it /models/gemma-3-27b-it
+          echo "Model sync complete."
+        volumeMounts:
+        - name: model-cache-volume
+          mountPath: /models
+      containers:
+      - name: vllm-container
+        image: vllm/vllm-openai:latest
+        command: ["python3", "-m", "vllm.entrypoints.openai.api_server"]
+        args:
+          - "--model=/models/gemma-3-27b-it"
+          - "--tensor-parallel-size=4"
+          - "--max-model-len=8192"
+          - "--kv-cache-dtype=auto"
+          - "--gpu-memory-utilization=0.6"
+        resources:
+          limits:
+            nvidia.com/gpu: "4"
+        ports:
+        - containerPort: 8000
+        volumeMounts:
+        - name: model-cache-volume
+          mountPath: /models
+        env:
+        - name: LD_LIBRARY_PATH
+          value: "/usr/local/nvidia/lib64:/usr/local/cuda/lib64"
+      volumes:
+      - name: model-cache-volume
+        persistentVolumeClaim:
+          claimName: vllm-model-cache-gemma-27b
+      nodeSelector:
+        cloud.google.com/gke-accelerator: nvidia-tesla-a100
