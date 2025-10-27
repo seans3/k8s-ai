@@ -39,7 +39,22 @@ This section provides advanced recipes for enhancing the reliability, efficiency
 
 ### Simplified High-Level Abstractions
 
+
+
 This section showcases how to simplify the deployment process by abstracting away the underlying complexity of Kubernetes and Google Cloud resources.
 
+
+
 -   **[One-Step Deployments with KCC and KRO](./kcc-kro/README.md)**
+
     This guide uses a combination of **Kubernetes Config Connector (KCC)** and the **Kubernetes Resource Orchestrator (KRO)** to create high-level, custom resources like `GemmaOnNvidiaL4Server` and `GemmaOnTPUServer`. This allows you to deploy a complete, multi-component inference stack (including IAM, GCS, and Kubernetes resources) with a single, simple YAML file.
+
+
+
+### Cluster Setup Tips
+
+
+
+-   **[Tips and Tricks for GKE Cluster Setup](./tips-and-tricks.md)**
+
+    This guide provides instructions on how to create cost-effective GPU node pools using Spot VMs, which is a great way to get access to high-demand GPUs for testing these recipes.
