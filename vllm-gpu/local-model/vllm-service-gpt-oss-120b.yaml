@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: vllm-gpt-oss-120b-service
+spec:
+  selector:
+    app: vllm-gpt-oss-120b
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8000
+  type: ClusterIP
