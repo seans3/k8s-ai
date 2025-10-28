@@ -22,6 +22,13 @@ spec:
         ai.gke.io/inference-server: vllm
         examples.ai.gke.io/source: user-guide
     spec:
+      # Tolerations are added to allow pods to be scheduled on nodes with specific taints.
+      # The "cloud.google.com/gke-spot" toleration allows the pod to be scheduled on Spot VMs.
+      tolerations:
+      - key: "cloud.google.com/gke-spot"
+        operator: "Equal"
+        value: "true"
+        effect: "NoSchedule"
       containers:
       - name: inference-server
         image: us-docker.pkg.dev/vertex-ai/vertex-vision-model-garden-dockers/pytorch-vllm-serve:20250312_0916_RC01

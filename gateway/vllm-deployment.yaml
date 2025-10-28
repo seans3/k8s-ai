@@ -19,6 +19,13 @@ spec:
         ai.gke.io/inference-server: vllm
         examples.ai.gke.io/source: user-guide
     spec:
+      # Tolerations are added to allow pods to be scheduled on nodes with specific taints.
+      # The "cloud.google.com/gke-spot" toleration allows the pod to be scheduled on Spot VMs.
+      tolerations:
+      - key: "cloud.google.com/gke-spot"
+        operator: "Equal"
+        value: "true"
+        effect: "NoSchedule"
       initContainers:
         # The initContainer is used to sync the LoRA adapters from the ConfigMap to the container.
         - name: lora-adapter-syncer

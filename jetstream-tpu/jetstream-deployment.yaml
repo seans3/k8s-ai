@@ -18,6 +18,11 @@ spec:
       # The service account is essential for Workload Identity, allowing the server
       # to securely access the model files in GCS.
       serviceAccountName: ${KSA_NAME}
+      tolerations:
+      - key: "cloud.google.com/gke-spot"
+        operator: "Equal"
+        value: "true"
+        effect: "NoSchedule"
       # This selector ensures the deployment is scheduled on a node with the correct
       # TPU hardware and topology.
       nodeSelector:

@@ -25,6 +25,17 @@ spec:
         ai.gke.io/inference-server: vllm
         examples.ai.gke.io/source: user-guide
     spec:
+      # Tolerations are added to allow pods to be scheduled on nodes with specific taints.
+      # The "nvidia.com/gpu" toleration allows the pod to be scheduled on nodes with GPUs.
+      # The "cloud.google.com/gke-spot" toleration allows the pod to be scheduled on Spot VMs.
+      tolerations:
+      - key: "nvidia.com/gpu"
+        operator: "Exists"
+        effect: "NoSchedule"
+      - key: "cloud.google.com/gke-spot"
+        operator: "Equal"
+        value: "true"
+        effect: "NoSchedule"
       nodeSelector:
         cloud.google.com/gke-accelerator: nvidia-h100-80gb
       containers:

@@ -17,6 +17,13 @@ spec:
         ai.gke.io/inference-server: vllm
     spec:
       serviceAccountName: vllm-sa
+      # Tolerations are added to allow pods to be scheduled on nodes with specific taints.
+      # The "cloud.google.com/gke-spot" toleration allows the pod to be scheduled on Spot VMs.
+      tolerations:
+      - key: "cloud.google.com/gke-spot"
+        operator: "Equal"
+        value: "true"
+        effect: "NoSchedule"
       initContainers:
       - name: model-downloader
         image: google/cloud-sdk:slim

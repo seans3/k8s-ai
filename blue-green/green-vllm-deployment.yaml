@@ -72,6 +72,17 @@ spec:
       - name: dshm
         emptyDir:
             medium: Memory
+      # Tolerations are added to allow pods to be scheduled on nodes with specific taints.
+      # The "nvidia.com/gpu" toleration allows the pod to be scheduled on nodes with GPUs.
+      # The "cloud.google.com/gke-spot" toleration allows the pod to be scheduled on Spot VMs.
+      tolerations:
+      - key: "nvidia.com/gpu"
+        operator: "Exists"
+        effect: "NoSchedule"
+      - key: "cloud.google.com/gke-spot"
+        operator: "Equal"
+        value: "true"
+        effect: "NoSchedule"
       # nodeSelector ensures the pod is scheduled on a node with an NVIDIA L4 GPU.
       nodeSelector:
         cloud.google.com/gke-accelerator: nvidia-l4
