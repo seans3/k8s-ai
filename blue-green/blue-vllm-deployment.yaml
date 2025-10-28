@@ -20,7 +20,10 @@ spec:
     spec:
       containers:
       - name: inference-server
-        image: us-docker.pkg.dev/vertex-ai/vertex-vision-model-garden-dockers/pytorch-vllm-serve:20250312_0916_RC01
+        image: vllm/vllm-openai:latest
+        env:
+        - name: LD_LIBRARY_PATH
+          value: "/usr/local/nvidia/lib64:/usr/local/cuda/lib64"
         # resources defines the CPU, memory, and GPU required by the container.
         # In GKE Autopilot, this request determines the type of node provisioned.
         resources:

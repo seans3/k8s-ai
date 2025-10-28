@@ -37,7 +37,7 @@ This is the configuration that has been successfully deployed and tested.
 *   **Deployment:** `vllm-a100-deployment.yaml`
 *   **Service:** `vllm-a100-service.yaml`
 *   **GPU:** 4x `nvidia-a100-80gb`
-*   **Container Image:** `us-docker.pkg.dev/vertex-ai/vertex-vision-model-garden-dockers/pytorch-vllm-serve:20250312_0916_RC01`
+*   **Container Image:** `vllm/vllm-openai:latest`
 
 ## Deployment Guide (A100 on GKE Autopilot)
 
@@ -129,9 +129,7 @@ Stop the port-forwarding process by returning to its terminal and pressing `Ctrl
 
 ## Troubleshooting & Container Images
 
-The choice of container image is critical for a successful deployment on GKE. The specified image, `us-docker.pkg.dev/vertex-ai/vertex-vision-model-garden-dockers/pytorch-vllm-serve:20250312_0916_RC01`, is a known-good snapshot that is compatible with GKE's managed NVIDIA drivers.
-
-During testing, newer tags (including `:latest`) from the same repository failed with low-level NCCL errors, indicating an incompatibility with the underlying drivers on the GKE nodes. It is highly recommended to use the specified dated tag for stability.
+The choice of container image is critical for a successful deployment on GKE. It is recommended to use the `vllm/vllm-openai:latest` image and to set the `LD_LIBRARY_PATH` environment variable to `/usr/local/nvidia/lib64:/usr/local/cuda/lib64` to ensure compatibility with the GKE's managed NVIDIA drivers.
 
 ## Alternative Configuration (H100 - Untested)
 

@@ -294,7 +294,10 @@ spec:
       # NO initContainers section needed anymore!
       containers:
       - name: vllm-container
-        image: us-docker.pkg.dev/vertex-ai/vertex-vision-model-garden-dockers/pytorch-vllm-serve:20250312_0916_RC01
+        image: vllm/vllm-openai:latest
+        env:
+        - name: LD_LIBRARY_PATH
+          value: "/usr/local/nvidia/lib64:/usr/local/cuda/lib64"
         command: ["python", "-m", "vllm.entrypoints.openai.api_server"]
         args:
           - "--model=/models/gemma-3-1b-it"
