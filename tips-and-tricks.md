@@ -74,6 +74,7 @@ Here are the commands to create the various GPU node pools used in the recipes. 
 ```bash
 gcloud container node-pools create gpu-l4-spot-pool \
   --cluster=${CLUSTER_NAME} \
+  --region=${REGION} \
   --machine-type=g2-standard-4 \
   --accelerator=type=nvidia-l4,count=1 \
   --spot \
@@ -89,6 +90,7 @@ gcloud container node-pools create gpu-l4-spot-pool \
 ```bash
 gcloud container node-pools create gpu-t4-spot-pool \
   --cluster=${CLUSTER_NAME} \
+  --region=${REGION} \
   --machine-type=n1-standard-4 \
   --accelerator=type=nvidia-tesla-t4,count=1 \
   --spot \
@@ -106,6 +108,7 @@ This pool is for multi-GPU workloads, attaching 4 GPUs per node.
 ```bash
 gcloud container node-pools create a100-40gb-4-spot-pool \
   --cluster=${CLUSTER_NAME} \
+  --region=${REGION} \
   --machine-type=a2-highgpu-4g \
   --accelerator=type=nvidia-tesla-a100,count=4 \
   --spot \
@@ -121,6 +124,7 @@ gcloud container node-pools create a100-40gb-4-spot-pool \
 ```bash
 gcloud container node-pools create a100-80gb-spot-pool \
   --cluster=${CLUSTER_NAME} \
+  --region=${REGION} \
   --machine-type=a2-ultragpu-1g \
   --accelerator=type=nvidia-a100-80gb,count=1 \
   --spot \
@@ -136,6 +140,7 @@ gcloud container node-pools create a100-80gb-spot-pool \
 ```bash
 gcloud container node-pools create h100-80gb-spot-pool \
   --cluster=${CLUSTER_NAME} \
+  --region=${REGION} \
   --machine-type=a3-highgpu-1g \
   --accelerator=type=nvidia-h100-80gb,count=1 \
   --spot \
