@@ -1,6 +1,19 @@
-# Deploying a vLLM Server with a GCS Model and Persistent Volume
+# Deploying vLLM with Local Models on GKE
 
-This document provides the steps to deploy a vLLM inference server on GKE, loading a model from a GCS bucket and using a Persistent Volume to cache the model data.
+This document provides the steps to deploy a vLLM inference server on GKE, loading various open-source models from a GCS bucket and using a Persistent Volume to cache the model data.
+
+This document provides the steps to deploy a vLLM inference server on GKE, loading various open-source models from a GCS bucket and using a Persistent Volume to cache the model data.
+
+## Available Models
+
+This directory contains the configurations to deploy several popular open-source models. The table below outlines the specific YAML files and hardware requirements for each model.
+
+| Model Name | Deployment File | Service File | PVC File | GPU Type | GPU # | PVC Size |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| `gemma-1b` | `vllm-deployment.yaml` | `vllm-service.yaml` | `persistent-volume-claim.yaml` | `nvidia-l4` | 1 | `50Gi` |
+| `gemma-27b` | `vllm-deployment-gemma-27b.yaml` | `vllm-service-gemma-27b.yaml` | `persistent-volume-claim-gemma-27b.yaml` | `nvidia-tesla-a100` | 4 | `150Gi` |
+| `gpt-oss-20b` | `vllm-deployment-gpt-oss-20b.yaml` | `vllm-service-gpt-oss-20b.yaml` | `persistent-volume-claim-gpt-oss-20b.yaml` | `nvidia-tesla-a100` | 4 | `200Gi` |
+| `gpt-oss-120b` | `vllm-deployment-gpt-oss-120b.yaml` | `vllm-service-gpt-oss-120b.yaml` | `persistent-volume-claim-gpt-oss-120b.yaml` | `nvidia-a100-80gb` | 8 | `250Gi` |
 
 ## Prerequisites
 
@@ -66,34 +79,36 @@ These steps create a GCP service account, a Kubernetes service account, and bind
 
 ### Step 2: Create the Persistent Volume Claim
 
-This will create a persistent disk that will be used to cache the model, preventing re-downloads when pods restart.
+This will create a persistent disk that will be used to cache the model, preventing re-downloads when pods restart. Choose the appropriate `persistent-volume-claim-*.yaml` file from the table above for the model you want to deploy.
 
 ```bash
-kubectl apply -f ./persistent-volume-claim.yaml
+# Replace <model-pvc-file> with the correct yaml file (e.g., persistent-volume-claim-gemma-27b.yaml)
+kubectl apply -f ./<model-pvc-file>
 ```
 
 ### Step 3: Deploy the vLLM Server
 
-Apply the deployment and service manifests to your cluster.
+Apply the deployment and service manifests to your cluster. Choose the appropriate `vllm-deployment-*.yaml` and `vllm-service-*.yaml` files from the table above for the model you want to deploy.
 
 ```bash
-kubectl apply -f ./vllm-deployment.yaml
-kubectl apply -f ./vllm-service.yaml
+# Replace <model-deployment-file> and <model-service-file> with the correct yaml files
+kubectl apply -f ./<model-deployment-file>
+kubectl apply -f ./<model-service-file>
 ```
 
 ### Step 4: Verify the Deployment
 
-Check the status of the deployment and pods. It may take several minutes for the pod to become ready as it needs to download the model files to the persistent volume for the first time.
+Check the status of the deployment and pods. It may take several minutes for the pod to become ready as it needs to download the model files to the persistent volume for the first time. Replace `<model-deployment-name>` and `<model-app-label>` with the correct names for the model you deployed.
 
 ```bash
-kubectl get deployment vllm-gemma-1b
-kubectl get pods -l app=vllm-gemma-1b
+kubectl get deployment <model-deployment-name>
+kubectl get pods -l app=<model-app-label>
 ```
 
-Once the pod is running, you can port-forward to the service to send inference requests:
+Once the pod is running, you can port-forward to the service to send inference requests. Replace `<model-service-name>` with the correct name for the model you deployed.
 
 ```bash
-kubectl port-forward service/vllm-gemma-1b-service 8000:80
+kubectl port-forward service/<model-service-name> 8000:80
 ```
 
 ---
@@ -123,11 +138,15 @@ This section documents the extensive troubleshooting process undertaken to debug
 *   **Action:** The configuration was reverted to use a standard `PersistentVolumeClaim` backed by a GCE persistent disk.
 *   **Problem 1: `StorageClass not found`:** The initial deployment failed because the `standard-gce-pd` `StorageClass` does not exist by default.
     *   **Fix:** A manifest for the `standard-gce-pd` `StorageClass` was created and applied.
-*   **Problem 2: `Failed to infer device type`:** The `vllm/vllm-openai:latest` container image failed to start, throwing a `RuntimeError`.
-    *   **Fix:** Switched to a known-stable image tag, `vllm/vllm-openai:v0.4.0`.
-*   **Problem 3: `gcloud` authentication:** The official Vertex AI container image failed to authenticate with GCS, as its internal scripts did not correctly use Workload Identity.
-    *   **Fix:** An `initContainer` was added to the deployment. This container, using the `google/cloud-sdk:slim` image, correctly authenticates with Workload Identity and downloads the model to the persistent disk *before* the main vLLM container starts.
-*   **Problem 4: vLLM Entrypoint:** The Vertex AI container's entrypoint script had issues with the provided arguments.
+*   **Problem 2: Container Image and Driver Incompatibility:** The `vllm/vllm-openai:latest` container image can sometimes have incompatibilities with the NVIDIA drivers on the GKE nodes, leading to CUDA errors.
+    *   **Fix:** Ensure that the `LD_LIBRARY_PATH` environment variable is set in your deployment YAML to point to the correct NVIDIA and CUDA library paths. This helps the vLLM container find the correct drivers on the node.
+
+      ```yaml
+      env:
+      - name: LD_LIBRARY_PATH
+        value: "/usr/local/nvidia/lib64:/usr/local/cuda/lib64"
+      ```
+*   **Problem 3: vLLM Entrypoint:** The Vertex AI container's entrypoint script had issues with the provided arguments.
     *   **Fix:** The deployment was modified to explicitly call the vLLM python module, bypassing the problematic entrypoint script.
 *   **Final Success:** After resolving these issues, the init container successfully downloaded the model, and the main vLLM container started correctly, loading the model from the persistent disk and serving inference requests.
 
