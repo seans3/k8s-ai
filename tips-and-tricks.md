@@ -36,6 +36,60 @@ gcloud compute accelerator-types list \
 ```
 The output will be a list of zones (e.g., `us-east1-b,us-east1-c`) that you can use for the `--node-locations` flag.
 
+## Understanding GPU Quota
+
+Before you can create a node pool with GPUs, you must have sufficient **GPU quota** in your Google Cloud project for the specific region you are operating in. Quota is a limit on the number of a particular resource you can use.
+
+### Standard vs. Preemptible vs. Committed Quota
+
+Google Cloud offers different types of quota for GPUs, and it's critical to understand which one your node pool will use.
+
+-   **Standard (On-Demand) Quota:** This is the quota for regular, on-demand GPUs. Workloads using this quota have the highest priority but also the highest cost. The metric name for this quota is typically `NVIDIA_L4_GPUS`.
+-   **Preemptible Quota:** This is the quota for Spot VMs. When you create a node pool with the `--spot` flag, as shown in these recipes, you are using your **preemptible quota**. This quota is separate from standard quota and is often easier to acquire for high-demand GPUs. The metric name is prefixed with `PREEMPTIBLE_`, for example, `PREEMPTIBLE_NVIDIA_L4_GPUS`.
+-   **Committed Quota:** This is for GPUs acquired through a long-term commitment (Committed Use Discount or CUD). It is not relevant for the ad-hoc, scalable patterns used in these recipes, which is why the command below filters it out.
+
+For all the recipes in this repository that use Spot VMs, you must ensure you have enough **preemptible quota** for the desired GPU type in your target region.
+
+### How to Check Your GPU Quota
+
+You can check your project's GPU quota for a specific region by running the following `gcloud` command. It filters for NVIDIA and TPU metrics, excludes committed quota, and formats the output as a table.
+
+```bash
+export REGION="us-central1" # Or any other region
+
+gcloud compute regions describe ${REGION} --format="json" | jq -r '.quotas | map(select((.metric | test("NVIDIA|TPU")) and (.metric | test("COMMITTED") | not))) | (["METRIC", "LIMIT", "USAGE"] | (., map(length*"-"))), (.[] | [.metric, .limit, .usage]) | @tsv' | column -t
+```
+
+**Example Output:**
+```
+METRIC                       LIMIT    USAGE
+------                       -----    -----
+NVIDIA_L4_GPUS               1.0      0.0
+PREEMPTIBLE_NVIDIA_L4_GPUS   1.0      0.0
+NVIDIA_A100_GPUS             0.0      0.0
+PREEMPTIBLE_NVIDIA_A100_GPUS 8.0      0.0
+```
+From this output, you can see that you have a limit of 1 preemptible L4 GPU and 8 preemptible A100 GPUs available in this region. If a recipe requires more than your limit, the node pool creation will fail.
+
+If your quota is insufficient, you will need to [request a quota increase](https://cloud.google.com/docs/quotas/view-manage#requesting_higher_quota).
+
+### Spot VMs and Pod Tolerations
+
+When you create a node pool with the `--spot` flag, GKE automatically applies a taint to the nodes in that pool: `cloud.google.com/gke-spot="true":NoSchedule`. This taint prevents Kubernetes from scheduling standard pods on these preemptible nodes.
+
+To ensure your pods can be scheduled on these nodes, you must add a corresponding **toleration** to your pod's specification. This signals to Kubernetes that your pod is explicitly allowed to run on a Spot VM.
+
+All the recipes in this repository that use Spot VMs already include the necessary toleration in their deployment manifests.
+
+**Example Toleration:**
+```yaml
+tolerations:
+- key: "cloud.google.com/gke-spot"
+  operator: "Equal"
+  value: "true"
+  effect: "NoSchedule"
+```
+
 ## GKE Standard vs. Autopilot
 
 GKE offers two modes of operation: Standard and Autopilot.
@@ -62,6 +116,8 @@ gcloud container clusters create ${CLUSTER_NAME} \
 ```
 
 ## 2. Create GPU Node Pools with Spot VMs
+
+> **Note:** Before creating a node pool, be sure to check that you have sufficient **preemptible GPU quota** for the GPU type and region you intend to use. See the [Understanding GPU Quota](#understanding-gpu-quota) section for instructions on how to check your limits.
 
 Here are the commands to create the various GPU node pools used in the recipes. Each command creates a node pool that:
 -   Uses the `--spot` flag to provision Spot VMs.
