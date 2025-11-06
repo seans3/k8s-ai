@@ -32,9 +32,6 @@ spec:
       containers:
       - name: inference-server
         image: vllm/vllm-openai:latest
-        env:
-        - name: LD_LIBRARY_PATH
-          value: "/usr/local/nvidia/lib64:/usr/local/cuda/lib64"
         resources:
           # Requesting a GPU is the critical step that triggers GKE Autopilot to provision a node
           # with the necessary hardware. Limits are set to match requests for predictable performance.
@@ -63,6 +60,10 @@ spec:
             secretKeyRef:
               name: hf-secret
               key: hf_token
+        - name: VLLM_LOGGING_LEVEL
+          value: DEBUG
+        - name: LD_LIBRARY_PATH
+          value: "/usr/local/nvidia/lib64:/usr/local/cuda/lib64"
         volumeMounts:
         # /dev/shm (shared memory) is used by PyTorch for inter-process communication.
         # Mounting a memory-backed volume here is crucial for performance.
