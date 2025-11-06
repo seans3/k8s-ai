@@ -44,7 +44,7 @@ With port forwarding active, send an inference request using `curl`:
 ```bash
 curl -X POST http://localhost:8080/v1/chat/completions \
 -H "Content-Type: application/json" \
--d 
+-d \
     "{
         \"model\": \"$MODEL_ID\",
         \"messages\": [{\"role\": \"user\", \"content\": \"Explain Quantum Computing in simple terms.\"}]
